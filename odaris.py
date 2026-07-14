@@ -1,18 +1,10 @@
-"""
-GLUCOVISION AI
-AI-Powered Personalized Diabetes Monitoring & Glucose Prediction System
-Educational Prototype Only - Not a Medical Device
-"""
-
 import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-import plotly.express as px
 from plotly.subplots import make_subplots
-from datetime import datetime, timedelta
+from datetime import datetime
 import io
-import math
 import random
 
 st.set_page_config(
@@ -110,7 +102,6 @@ hr { border-color: #30363d !important; border-width: 1px !important; }
 .glass-card strong { color: #00d9ff; }
 </style>
 """, unsafe_allow_html=True)
-
 FOOD_DB = {
     "Cooked Rice (white) (100 g)": {"calories": 130.0, "carbs": 28.0, "protein": 2.7, "fat": 0.3},
     "Wheat Roti / Chapati (1 medium (40 g))": {"calories": 104.0, "carbs": 20.0, "protein": 3.0, "fat": 1.7},
@@ -213,6 +204,7 @@ FOOD_DB = {
     "Jalebi (100 g)": {"calories": 350.0, "carbs": 60.0, "protein": 2.0, "fat": 12.0},
     "Kheer (1 bowl (150 g))": {"calories": 230.0, "carbs": 35.0, "protein": 5.0, "fat": 8.0},
 }
+
 INSULIN_TYPES = [
     "No Insulin",
     "Rapid-Acting (e.g., Lispro, Aspart)",
@@ -226,10 +218,14 @@ def calculate_bmi(weight_kg: float, height_cm: float):
     if height_cm <= 0 or weight_kg <= 0:
         return 0.0, "N/A"
     bmi = weight_kg / ((height_cm / 100) ** 2)
-    if bmi < 18.5: cat = "Underweight"
-    elif bmi < 25: cat = "Normal"
-    elif bmi < 30: cat = "Overweight"
-    else: cat = "Obese"
+    if bmi < 18.5:
+        cat = "Underweight"
+    elif bmi < 25:
+        cat = "Normal"
+    elif bmi < 30:
+        cat = "Overweight"
+    else:
+        cat = "Obese"
     return round(bmi, 1), cat
 
 def _smoothstep(edge0: float, edge1: float, x: float) -> float:
@@ -246,6 +242,7 @@ INSULIN_ACTION_PROFILE = {
     "Long-Acting (Glargine, Detemir)": {"onset": 90, "peak": 360, "end": 1380},
     "Mixed Insulin (70/30)": {"onset": 30, "peak": 180, "end": 720},
 }
+
 CARB_RESPONSE_PROFILE = {
     "No Diabetes": {"peak": 45, "decay": 90},
     "Prediabetes": {"peak": 50, "decay": 115},
@@ -254,9 +251,12 @@ CARB_RESPONSE_PROFILE = {
 }
 
 def _cumulative_insulin_fraction(minutes: float, onset: float, peak: float, end: float) -> float:
-    if minutes <= onset: return 0.0
-    if minutes <= peak: return 0.5 * _smoothstep(onset, peak, minutes)
-    if minutes <= end: return 0.5 + 0.5 * _smoothstep(peak, end, minutes)
+    if minutes <= onset:
+        return 0.0
+    if minutes <= peak:
+        return 0.5 * _smoothstep(onset, peak, minutes)
+    if minutes <= end:
+        return 0.5 + 0.5 * _smoothstep(peak, end, minutes)
     return 1.0
 
 def _carb_excursion_fraction(minutes: float, peak: float, decay: float) -> float:
@@ -288,14 +288,24 @@ def glucose_prediction_model(
     exercise_duration_min: float = 0.0,
 ) -> dict:
     weight_kg = weight_kg if weight_kg and weight_kg > 0 else 70.0
-    carb_factor = {"No Diabetes": 1.1, "Prediabetes": 1.6, "Type 2 Diabetes": 2.2, "Type 1 Diabetes": 3.0}.get(diabetes_type, 1.6)
+    carb_factor = {
+        "No Diabetes": 1.1,
+        "Prediabetes": 1.6,
+        "Type 2 Diabetes": 2.2,
+        "Type 1 Diabetes": 3.0,
+    }.get(diabetes_type, 1.6)
+
     carb_peak_rise = carbs_g * carb_factor
     carb_profile = CARB_RESPONSE_PROFILE.get(diabetes_type, CARB_RESPONSE_PROFILE["Prediabetes"])
     meal_elapsed_min = time_since_meal_hr * 60.0
 
     def _carb_delta_at(future_min: float) -> float:
-        at_future = _carb_excursion_fraction(meal_elapsed_min + future_min, carb_profile["peak"], carb_profile["decay"])
-        at_now = _carb_excursion_fraction(meal_elapsed_min, carb_profile["peak"], carb_profile["decay"])
+        at_future = _carb_excursion_fraction(
+            meal_elapsed_min + future_min, carb_profile["peak"], carb_profile["decay"]
+        )
+        at_now = _carb_excursion_fraction(
+            meal_elapsed_min, carb_profile["peak"], carb_profile["decay"]
+        )
         return carb_peak_rise * (at_future - at_now)
 
     bmr_kcal_day = _estimate_bmr(weight_kg, age, gender)
@@ -339,49 +349,85 @@ def glucose_prediction_model(
     predictions = {}
     for t in (30, 60, 90, 120):
         carb_delta = _carb_delta_at(t)
-        already_delivered = _cumulative_insulin_fraction(elapsed_min, ins_profile["onset"], ins_profile["peak"], ins_profile["end"])
-        delivered_by_t = _cumulative_insulin_fraction(elapsed_min + t, ins_profile["onset"], ins_profile["peak"], ins_profile["end"])
+
+        already_delivered = _cumulative_insulin_fraction(
+            elapsed_min, ins_profile["onset"], ins_profile["peak"], ins_profile["end"]
+        )
+        delivered_by_t = _cumulative_insulin_fraction(
+            elapsed_min + t, ins_profile["onset"], ins_profile["peak"], ins_profile["end"]
+        )
         insulin_delta = total_insulin_effect * max(0.0, delivered_by_t - already_delivered)
+
         bmr_delta = _bmr_drop(t)
         exercise_delta = _exercise_drop(t)
+
         predicted = current_glucose + carb_delta - insulin_delta - bmr_delta - exercise_delta
         fasting_floor = current_glucose * 0.88 if insulin_delta > 5 else current_glucose * 0.95
         predicted = max(fasting_floor, predicted)
         predictions[t] = round(min(600.0, predicted), 1)
+
     return predictions
 
-def health_score(glucose: float, bmi: float, diabetes_type: str, predicted_peak: float, carbs: float):
+def health_score(
+    glucose: float,
+    bmi: float,
+    diabetes_type: str,
+    predicted_peak: float,
+    carbs: float,
+):
     score = 100.0
-    if glucose < 70 or glucose > 180: score -= 25
-    elif glucose < 80 or glucose > 140: score -= 12
-    elif glucose < 90 or glucose > 120: score -= 5
-    if predicted_peak > 200: score -= 20
-    elif predicted_peak > 160: score -= 10
-    if bmi < 16 or bmi >= 35: score -= 20
-    elif bmi < 18.5 or bmi >= 30: score -= 10
-    elif bmi < 17 or bmi >= 27: score -= 4
+    if glucose < 70 or glucose > 180:
+        score -= 25
+    elif glucose < 80 or glucose > 140:
+        score -= 12
+    elif glucose < 90 or glucose > 120:
+        score -= 5
+
+    if predicted_peak > 200:
+        score -= 20
+    elif predicted_peak > 160:
+        score -= 10
+
+    if bmi < 16 or bmi >= 35:
+        score -= 20
+    elif bmi < 18.5 or bmi >= 30:
+        score -= 10
+    elif bmi < 17 or bmi >= 27:
+        score -= 4
+
     dm_penalty = {"No Diabetes": 0, "Prediabetes": 8, "Type 2 Diabetes": 15, "Type 1 Diabetes": 18}
     score -= dm_penalty.get(diabetes_type, 0)
-    if carbs > 80: score -= 10
-    elif carbs > 50: score -= 5
+
+    if carbs > 80:
+        score -= 10
+    elif carbs > 50:
+        score -= 5
+
     score = max(0, min(100, score))
-    if score >= 75: risk = "Low Risk"
-    elif score >= 50: risk = "Medium Risk"
-    else: risk = "High Risk"
+    if score >= 75:
+        risk = "Low Risk"
+    elif score >= 50:
+        risk = "Medium Risk"
+    else:
+        risk = "High Risk"
+
     return round(score, 1), risk
 
 def get_recommendations(diabetes_type, glucose, predicted_peak, bmi, bmi_cat, carbs):
     recs = []
+
     if glucose < 70:
         recs.append("⚠️ Current glucose appears low (hypoglycemia range). Consider consuming fast-acting carbohydrates like juice or glucose tablets immediately.")
     elif glucose > 180:
         recs.append("🔴 Current glucose is elevated. Ensure adequate hydration and consult your healthcare provider about medication adjustments.")
     elif 80 <= glucose <= 120:
         recs.append("✅ Your current glucose reading is within a healthy range. Maintain this with consistent meal timing and activity.")
+
     if predicted_peak > 200:
         recs.append("📈 Glucose is predicted to rise significantly. A 15–20 minute post-meal walk can reduce peak glucose by up to 30%.")
     elif predicted_peak > 160:
         recs.append("📊 Moderate glucose rise predicted. Monitor closely and consider light physical activity after eating.")
+
     if diabetes_type == "Type 1 Diabetes":
         recs.append("💉 As a Type 1 diabetic, consistent carb-counting and insulin-to-carb ratio management is essential. Discuss your I:C ratio with your endocrinologist.")
     elif diabetes_type == "Type 2 Diabetes":
@@ -390,24 +436,27 @@ def get_recommendations(diabetes_type, glucose, predicted_peak, bmi, bmi_cat, ca
         recs.append("🌿 Prediabetes can often be reversed with lifestyle changes. Aim for 150 minutes of moderate exercise per week and reduce sugar intake.")
     else:
         recs.append("✅ No diabetes detected. Maintain a balanced diet and active lifestyle to prevent future risk.")
+
     if bmi_cat == "Obese":
         recs.append("⚖️ BMI indicates obesity, which significantly increases insulin resistance. A 5–10% weight reduction can improve glucose sensitivity meaningfully.")
     elif bmi_cat == "Overweight":
         recs.append("⚖️ Slightly elevated BMI noted. Regular cardiovascular exercise (30 min/day) can help improve metabolic health.")
     elif bmi_cat == "Underweight":
         recs.append("⚖️ BMI indicates underweight status. Adequate caloric intake with balanced nutrition is important for metabolic function.")
+
     if carbs > 80:
         recs.append("🍽️ High carbohydrate intake detected. Consider splitting this meal into smaller portions and pairing carbs with protein and healthy fats to blunt glucose spikes.")
     elif carbs > 50:
         recs.append("🥦 Moderate carb load. Including non-starchy vegetables can help slow carbohydrate absorption.")
+
     recs.append("💧 Staying well-hydrated (8–10 glasses of water daily) supports kidney function and glucose regulation.")
     recs.append("😴 Quality sleep (7–9 hours) is crucial for glucose regulation. Poor sleep is linked to increased insulin resistance.")
+
     return recs[:7]
 
 def generate_pdf_report(*args, **kwargs) -> bytes:
     return b""
-
-if "logged_in" not in st.session_state:
+    if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 if "username" not in st.session_state:
     st.session_state.username = ""
@@ -494,17 +543,20 @@ mbti_desc = {
     "ESTP": "Bold, practical, and action-oriented.",
     "ESFP": "Outgoing, lively, and spontaneous."
 }
+
 def mbti_scores():
     scores = {k: 0 for k in list("EISTNFJP")}
     for q in mbti_questions:
         ans = st.session_state.mbti_answers.get(q["id"], "Neutral")
         scores[q["pole"]] += mbti_score_map[ans]
     return scores
+
 def mbti_type(scores):
     out = []
     for a, b in [("E", "I"), ("S", "N"), ("T", "F"), ("J", "P")]:
         out.append(a if scores[a] >= scores[b] else b)
     return "".join(out)
+
 def reset_game():
     st.session_state.game_started = False
     st.session_state.game_over = False
@@ -513,6 +565,7 @@ def reset_game():
     st.session_state.player_vy = 0
     st.session_state.obstacles = []
     st.session_state.game_frame = 0
+
 def init_game():
     st.session_state.game_started = True
     st.session_state.game_over = False
@@ -521,6 +574,7 @@ def init_game():
     st.session_state.player_vy = 0
     st.session_state.game_frame = 0
     st.session_state.obstacles = [{"x": 65}, {"x": 110}, {"x": 155}, {"x": 200}, {"x": 245}]
+
 def update_game(jump_pressed):
     gravity = 1
     jump_power = -11
@@ -547,9 +601,12 @@ def update_game(jump_pressed):
         st.session_state.game_won = True
 
 def bmi_category(bmi):
-    if bmi < 18.5: return "Underweight"
-    if bmi < 25: return "Healthy weight"
-    if bmi < 30: return "Overweight"
+    if bmi < 18.5:
+        return "Underweight"
+    if bmi < 25:
+        return "Healthy weight"
+    if bmi < 30:
+        return "Overweight"
     return "Obesity risk"
 
 def health_ai(height_cm, weight_kg, age, diet, exercise, sleep_hours, water_glasses, fast_food, smoking):
@@ -559,23 +616,40 @@ def health_ai(height_cm, weight_kg, age, diet, exercise, sleep_hours, water_glas
     risk = 0
     issues, tips = [], []
     if bmi < 18.5:
-        risk += 2; issues.append("Low weight-related energy or nutrient deficiency risk."); tips.append("Increase balanced calories, protein, and nutrient-rich foods.")
+        risk += 2
+        issues.append("Low weight-related energy or nutrient deficiency risk.")
+        tips.append("Increase balanced calories, protein, and nutrient-rich foods.")
     elif bmi >= 25:
-        risk += 2; issues.append("Weight-related risk may be higher."); tips.append("Focus on balanced meals and regular physical activity.")
+        risk += 2
+        issues.append("Weight-related risk may be higher.")
+        tips.append("Focus on balanced meals and regular physical activity.")
     if exercise < 150:
-        risk += 2; issues.append("Sedentary lifestyle risk."); tips.append("Try to reach at least 150 minutes of moderate activity per week.")
+        risk += 2
+        issues.append("Sedentary lifestyle risk.")
+        tips.append("Try to reach at least 150 minutes of moderate activity per week.")
     if sleep_hours < 7:
-        risk += 1; issues.append("Possible fatigue or poor recovery risk."); tips.append("Aim for 7 to 9 hours of sleep.")
+        risk += 1
+        issues.append("Possible fatigue or poor recovery risk.")
+        tips.append("Aim for 7 to 9 hours of sleep.")
     if water_glasses < 6:
-        risk += 1; issues.append("Low hydration risk."); tips.append("Drink more water through the day.")
+        risk += 1
+        issues.append("Low hydration risk.")
+        tips.append("Drink more water through the day.")
     if diet == "Poor":
-        risk += 2; issues.append("Nutrient imbalance risk."); tips.append("Add fruits, vegetables, whole grains, and lean protein.")
+        risk += 2
+        issues.append("Nutrient imbalance risk.")
+        tips.append("Add fruits, vegetables, whole grains, and lean protein.")
     elif diet == "Average":
-        risk += 1; tips.append("Improve meal quality with more whole foods.")
+        risk += 1
+        tips.append("Improve meal quality with more whole foods.")
     if fast_food >= 4:
-        risk += 1; issues.append("High fast-food intake may increase health risk."); tips.append("Reduce fast food and processed snacks.")
+        risk += 1
+        issues.append("High fast-food intake may increase health risk.")
+        tips.append("Reduce fast food and processed snacks.")
     if smoking:
-        risk += 3; issues.append("Smoking increases long-term health risk."); tips.append("Stopping smoking can greatly improve health.")
+        risk += 3
+        issues.append("Smoking increases long-term health risk.")
+        tips.append("Stopping smoking can greatly improve health.")
     if age >= 45:
         tips.append("Regular health checkups become more important with age.")
     level = "Low" if risk <= 2 else "Moderate" if risk <= 5 else "Higher"
@@ -611,8 +685,7 @@ def credits_page():
 <p style='margin-top:20px;color:#bfbfbf;'>© 2026 Unified AI Suite</p>
 </div>
 """, unsafe_allow_html=True)
-
-def app():
+    def app():
     st.sidebar.markdown("""
     <div class="sidebar-logo">
         <div class="sidebar-logo-title">Unified AI Suite</div>
@@ -642,16 +715,26 @@ def app():
     if page == "🏠 Home":
         st.markdown("<div class='hero-header'><h1 class='hero-title'>Unified AI Suite</h1><p class='hero-subtitle'>MBTI + Game + Health AI + GlucoVision</p></div>", unsafe_allow_html=True)
         c1, c2, c3, c4 = st.columns(4)
-        with c1: st.markdown("<div class='metric-card'><div class='metric-value'>MBTI</div><div class='metric-label'>Personality</div></div>", unsafe_allow_html=True)
-        with c2: st.markdown("<div class='metric-card'><div class='metric-value'>GAME</div><div class='metric-label'>Mini Game</div></div>", unsafe_allow_html=True)
-        with c3: st.markdown("<div class='metric-card'><div class='metric-value'>HEALTH</div><div class='metric-label'>Wellness AI</div></div>", unsafe_allow_html=True)
-        with c4: st.markdown("<div class='metric-card'><div class='metric-value'>GLUCO</div><div class='metric-label'>Glucose AI</div></div>", unsafe_allow_html=True)
+        with c1:
+            st.markdown("<div class='metric-card'><div class='metric-value'>MBTI</div><div class='metric-label'>Personality</div></div>", unsafe_allow_html=True)
+        with c2:
+            st.markdown("<div class='metric-card'><div class='metric-value'>GAME</div><div class='metric-label'>Mini Game</div></div>", unsafe_allow_html=True)
+        with c3:
+            st.markdown("<div class='metric-card'><div class='metric-value'>HEALTH</div><div class='metric-label'>Wellness AI</div></div>", unsafe_allow_html=True)
+        with c4:
+            st.markdown("<div class='metric-card'><div class='metric-value'>GLUCO</div><div class='metric-label'>Glucose AI</div></div>", unsafe_allow_html=True)
         st.info("Use the sidebar to open any section.")
+
     elif page == "📝 MBTI Test":
         st.title("MBTI Personality Test")
         with st.form("mbti_form"):
             for q in mbti_questions:
-                st.session_state.mbti_answers[q["id"]] = st.radio(f"Q{q['id']}. {q['text']}", mbti_options, index=2, key=f"m_{q['id']}")
+                st.session_state.mbti_answers[q["id"]] = st.radio(
+                    f"Q{q['id']}. {q['text']}",
+                    mbti_options,
+                    index=2,
+                    key=f"m_{q['id']}"
+                )
                 st.write("")
             submitted = st.form_submit_button("Generate MBTI Result")
         if submitted:
@@ -660,6 +743,7 @@ def app():
             st.session_state.mbti_done = True
             st.session_state.mbti_result = {"type": result, "scores": scores}
             st.success("MBTI result generated.")
+
     elif page == "📊 MBTI Results":
         st.title("Your MBTI Report")
         if not st.session_state.mbti_done or st.session_state.mbti_result is None:
@@ -667,14 +751,23 @@ def app():
         else:
             result = st.session_state.mbti_result["type"]
             scores = st.session_state.mbti_result["scores"]
-            st.markdown(f"<div class='metric-card'><h1 style='color:#66FCF1;text-align:center;'>{result}</h1><p style='text-align:center;color:#e0e0e0;font-size:18px;'>{mbti_desc.get(result, 'Balanced personality.')}</p></div>", unsafe_allow_html=True)
+            st.markdown(
+                f"<div class='metric-card'><h1 style='color:#66FCF1;text-align:center;'>{result}</h1><p style='text-align:center;color:#e0e0e0;font-size:18px;'>{mbti_desc.get(result, 'Balanced personality.')}</p></div>",
+                unsafe_allow_html=True
+            )
             st.write("")
-            for a, b, label in [("E", "I", "Extraversion / Introversion"), ("S", "N", "Sensing / Intuition"), ("T", "F", "Thinking / Feeling"), ("J", "P", "Judging / Perceiving")]:
+            for a, b, label in [
+                ("E", "I", "Extraversion / Introversion"),
+                ("S", "N", "Sensing / Intuition"),
+                ("T", "F", "Thinking / Feeling"),
+                ("J", "P", "Judging / Perceiving"),
+            ]:
                 total = scores[a] + scores[b]
                 pct = int((scores[a] / total) * 100) if total else 50
                 st.write(f"**{label}**")
                 st.progress(pct / 100)
                 st.caption(f"{a}: {scores[a]} | {b}: {scores[b]}")
+
     elif page == "🎮 Game":
         st.title("Mini Geometry Dash Game")
         c1, c2 = st.columns([1, 1])
@@ -706,6 +799,7 @@ def app():
         elif st.session_state.game_won:
             st.success("You completed the one-level game!")
             st.balloons()
+
     elif page == "🏥 Health AI":
         st.title("Health AI Assistant")
         st.write("General wellness estimates only, not a medical diagnosis.")
@@ -741,6 +835,7 @@ def app():
             for tip in tips:
                 st.write("✅", tip)
             st.markdown("</div>", unsafe_allow_html=True)
+
     elif page == "🩺 GlucoVision":
         st.title("GlucoVision AI")
         st.write("Educational diabetes monitoring and glucose prediction prototype.")
@@ -758,7 +853,14 @@ def app():
                 bmi = st.number_input("BMI", min_value=10.0, max_value=60.0, value=22.0)
             go = st.form_submit_button("Predict Glucose")
         if go:
-            preds = glucose_prediction_model(current_glucose, carbs_g, diabetes_type, insulin_type, insulin_dose, weight_kg=weight_kg)
+            preds = glucose_prediction_model(
+                current_glucose,
+                carbs_g,
+                diabetes_type,
+                insulin_type,
+                insulin_dose,
+                weight_kg=weight_kg
+            )
             peak = max(preds.values())
             score, risk = health_score(current_glucose, bmi, diabetes_type, peak, carbs_g)
             recs = get_recommendations(diabetes_type, current_glucose, peak, bmi, bmi_category(bmi), carbs_g)
@@ -777,9 +879,14 @@ def app():
                 st.write("•", r)
             st.markdown("</div>", unsafe_allow_html=True)
             fig = go.Figure()
-            fig.add_trace(go.Scatter(x=[30, 60, 90, 120], y=[preds[30], preds[60], preds[90], preds[120]], mode="lines+markers"))
+            fig.add_trace(go.Scatter(
+                x=[30, 60, 90, 120],
+                y=[preds[30], preds[60], preds[90], preds[120]],
+                mode="lines+markers"
+            ))
             fig.update_layout(template="plotly_dark", height=400, margin=dict(l=20, r=20, t=20, b=20))
             st.plotly_chart(fig, use_container_width=True)
+
     elif page == "⭐ Special Credits":
         credits_page()
 
