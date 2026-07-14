@@ -1,5 +1,5 @@
 """
-GLUCOVISION AI - Freemium SaaS Edition
+GLUCOVISION AI (PRO EDITION)
 AI-Powered Personalized Diabetes Monitoring & Glucose Prediction System
 Educational Prototype Only - Not a Medical Device
 """
@@ -13,75 +13,10 @@ from plotly.subplots import make_subplots
 from datetime import datetime, timedelta
 import io
 import math
-import sqlite3
-import hashlib
-
-# ─── DATABASE & AUTHENTICATION SYSTEMS ────────────────────────────────────────
-DB_FILE = 'glucovision_saas.db'
-
-def init_db():
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            username TEXT PRIMARY KEY,
-            password_hash TEXT,
-            account_type TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    conn.commit()
-    conn.close()
-
-def hash_password(password):
-    return hashlib.sha256(password.encode()).hexdigest()
-
-def create_user(username, password):
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    try:
-        c.execute("INSERT INTO users (username, password_hash, account_type) VALUES (?, ?, ?)",
-                  (username, hash_password(password), 'FREE'))
-        conn.commit()
-        success = True
-    except sqlite3.IntegrityError:
-        success = False
-    finally:
-        conn.close()
-    return success
-
-def verify_user(username, password):
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("SELECT password_hash, account_type FROM users WHERE username = ?", (username,))
-    row = c.fetchone()
-    conn.close()
-    if row and row[0] == hash_password(password):
-        return True, row[1]
-    return False, None
-
-def upgrade_user(username):
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("UPDATE users SET account_type = 'PREMIUM' WHERE username = ?", (username,))
-    conn.commit()
-    conn.close()
-    st.session_state.account_type = 'PREMIUM'
-
-# Initialize local database
-init_db()
-
-# Initialize session states for authentication
-if 'logged_in' not in st.session_state:
-    st.session_state.logged_in = False
-if 'username' not in st.session_state:
-    st.session_state.username = None
-if 'account_type' not in st.session_state:
-    st.session_state.account_type = None
 
 # ─── PAGE CONFIG ──────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="GlucoVision AI",
+    page_title="GlucoVision AI - Pro Dashboard",
     page_icon="🩺",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -90,29 +25,27 @@ st.set_page_config(
 # ─── GLOBAL CSS ───────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
 html, body, [class*="css"] {
     font-family: 'Inter', sans-serif;
     color: #ffffff;
 }
 
-/* Background - simple dark navy, no fancy gradient */
+/* Main Background */
 .stApp {
     background-color: #0d1117;
 }
 
-/* Sidebar */
+/* Sidebar Styling */
 section[data-testid="stSidebar"] {
     background-color: #161b22;
     border-right: 2px solid #00d9ff;
 }
-section[data-testid="stSidebar"] .block-container {
-    padding: 1rem;
-}
+section[data-testid="stSidebar"] .block-container { padding: 1rem; }
 
-/* All labels and text - bright white, bold */
-label, .stTextInput label, .stNumberInput label, 
+/* Dynamic Typography & Form Labels */
+label, .stTextInput label, .stNumberInput label,
 .stSelectbox label, .stSlider label, .stMultiSelect label {
     color: #ffffff !important;
     font-weight: 700 !important;
@@ -125,60 +58,56 @@ p, .stMarkdown p {
     font-size: 0.95rem !important;
 }
 
-/* Metric cards - solid borders, bright values */
+/* Premium Metric Cards */
 .metric-card {
     background-color: #161b22;
     border: 2px solid #00d9ff;
     border-radius: 10px;
-    padding: 1rem;
+    padding: 1.2rem;
     text-align: center;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 }
 .metric-value {
-    font-size: 1.9rem;
+    font-size: 2.1rem;
     font-weight: 800;
     color: #00d9ff;
     line-height: 1.2;
 }
 .metric-label {
-    font-size: 0.78rem;
+    font-size: 0.8rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: #c9d1d9;
-    margin-top: 0.3rem;
+    margin-top: 0.4rem;
 }
-.metric-icon {
-    font-size: 1.3rem;
-    margin-bottom: 0.25rem;
-}
+.metric-icon { font-size: 1.5rem; margin-bottom: 0.25rem; }
 
-/* Section headers - each section gets its own bright color, not one matching brand color */
+/* Custom Multi-Color Section Headers */
 .section-header {
     display: flex;
     align-items: center;
-    gap: 0.7rem;
+    gap: 0.8rem;
+    margin-top: 1.5rem;
     margin-bottom: 1.2rem;
     padding-bottom: 0.6rem;
     border-bottom: 3px solid #00d9ff;
 }
 .section-icon {
-    width: 36px;
-    height: 36px;
+    width: 40px; height: 40px;
     background-color: #00d9ff;
-    border-radius: 6px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.1rem;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.2rem;
 }
 .section-title {
-    font-size: 1.1rem;
+    font-size: 1.2rem;
     font-weight: 800;
     color: #ffffff;
     letter-spacing: 0.02em;
 }
 
-/* Color variants for headers */
+/* Color Palette Cycles for Contextual Sections */
 .sh-blue   { border-bottom-color: #1e90ff; }
 .sh-blue   .section-icon { background-color: #1e90ff; }
 .sh-green  { border-bottom-color: #00e676; }
@@ -196,264 +125,251 @@ p, .stMarkdown p {
 .sh-teal   { border-bottom-color: #00ffc8; }
 .sh-teal   .section-icon { background-color: #00ffc8; }
 
-/* Hero header */
+/* Hero Branding Block */
 .hero-header {
     text-align: center;
-    padding: 1.8rem 1rem;
+    padding: 2rem 1rem;
     background-color: #161b22;
     border-radius: 12px;
     border: 3px solid #00e676;
     margin-bottom: 1.5rem;
 }
 .hero-title {
-    font-size: 2.7rem;
+    font-size: 3rem;
     font-weight: 800;
     color: #00d9ff;
     margin: 0;
     letter-spacing: -0.01em;
 }
 .hero-subtitle {
-    font-size: 0.95rem;
+    font-size: 1rem;
     color: #c9d1d9;
     margin: 0.5rem 0 0;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.08em;
 }
 
-/* Disclaimer */
-.disclaimer {
-    background-color: #3d0a0a;
-    border: 3px solid #ff3b3b;
-    border-radius: 8px;
-    padding: 0.8rem 1.2rem;
-    margin-bottom: 1.5rem;
-    font-size: 0.85rem;
-    font-weight: 700;
-    color: #ff8080;
-}
+/* Risk Threshold Indicators */
+.risk-low   { color: #00e676; background: #0a2e1a; border: 2px solid #00e676; border-radius:6px; padding:4px 12px; font-size:0.85rem; font-weight:800; }
+.risk-medium{ color: #ffd60a; background: #332700; border: 2px solid #ffd60a; border-radius:6px; padding:4px 12px; font-size:0.85rem; font-weight:800; }
+.risk-high  { color: #ff3b3b; background: #3d0a0a; border: 2px solid #ff3b3b; border-radius:6px; padding:4px 12px; font-size:0.85rem; font-weight:800; }
 
-/* Upgrade Messaging Boxes */
-.upgrade-box {
-    background: #1c1917;
-    border: 2px dashed #a855f7;
-    border-radius: 10px;
-    padding: 2rem;
-    text-align: center;
-    margin: 1.5rem 0;
-}
-.upgrade-title {
-    font-size: 1.3rem;
-    font-weight: 800;
-    color: #ffd60a;
-    margin-bottom: 0.5rem;
-}
-
-/* Risk badges */
-.risk-low {
-    color: #00e676;
-    background: #0a2e1a;
-    border: 2px solid #00e676;
-    border-radius: 6px;
-    padding: 3px 10px;
-    font-size: 0.85rem;
-    font-weight: 800;
-}
-.risk-medium {
-    color: #ffd60a;
-    background: #332700;
-    border: 2px solid #ffd60a;
-    border-radius: 6px;
-    padding: 3px 10px;
-    font-size: 0.85rem;
-    font-weight: 800;
-}
-.risk-high {
-    color: #ff3b3b;
-    background: #3d0a0a;
-    border: 2px solid #ff3b3b;
-    border-radius: 6px;
-    padding: 3px 10px;
-    font-size: 0.85rem;
-    font-weight: 800;
-}
-
-/* Streamlit widget overrides */
-.stSelectbox > div > div {
-    background-color: #161b22 !important;
-    border: 2px solid #30363d !important;
-    color: #ffffff !important;
-}
-.stNumberInput > div > div > input {
-    background-color: #161b22 !important;
-    border: 2px solid #30363d !important;
-    color: #ffffff !important;
-    font-weight: 700 !important;
-}
-.stTextInput > div > div > input {
-    background-color: #161b22 !important;
-    border: 2px solid #30363d !important;
-    color: #ffffff !important;
-    font-weight: 700 !important;
-}
-div[data-testid="metric-container"] {
-    background-color: #161b22;
-    border: 2px solid #30363d;
-    border-radius: 8px;
-    padding: 0.5rem 1rem;
-}
-div[data-testid="metric-container"] label {
-    color: #c9d1d9 !important;
-    font-weight: 700 !important;
-}
-div[data-testid="metric-container"] [data-testid="metric-value"] {
-    color: #00d9ff !important;
-    font-weight: 800 !important;
-}
+/* Widget Custom Overrides */
+.stSelectbox > div > div { background-color: #161b22 !important; border: 2px solid #30363d !important; color: #ffffff !important; }
+.stNumberInput > div > div > input { background-color: #161b22 !important; border: 2px solid #30363d !important; color: #ffffff !important; font-weight: 700 !important; }
+.stTextInput > div > div > input { background-color: #161b22 !important; border: 2px solid #30363d !important; color: #ffffff !important; font-weight: 700 !important; }
 .stButton > button {
     background-color: #00e676 !important;
     color: #0d1117 !important;
     border: none !important;
     border-radius: 6px !important;
     font-weight: 800 !important;
-    font-size: 0.95rem !important;
-    padding: 0.5rem 1.5rem !important;
+    font-size: 1rem !important;
+    padding: 0.6rem 2rem !important;
 }
-.stButton > button:hover {
-    background-color: #5cffb0 !important;
-}
-hr {
-    border-color: #30363d !important;
-    border-width: 1px !important;
-}
+.stButton > button:hover { background-color: #5cffb0 !important; }
 
-/* Sidebar logo */
-.sidebar-logo {
-    text-align: center;
-    padding: 1rem 0 1.5rem;
-    border-bottom: 2px solid #00d9ff;
-    margin-bottom: 1.5rem;
-}
-.sidebar-logo-title {
-    font-size: 1.4rem;
-    font-weight: 800;
-    color: #00d9ff;
-}
-.sidebar-logo-sub {
-    font-size: 0.7rem;
-    color: #8b949e;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-}
-
-/* Nav pills */
-.nav-pill {
-    display: block;
-    padding: 0.5rem 1rem;
-    margin: 0.2rem 0;
-    border-radius: 6px;
-    color: #c9d1d9;
-    font-size: 0.88rem;
-    font-weight: 700;
-    cursor: pointer;
-}
-.nav-pill:hover {
-    background-color: #21262d;
-    color: #ffffff;
-}
-
-/* Recommendation cards */
+/* Recommendation Cards */
 .rec-card {
     background-color: #161b22;
     border: 2px solid #30363d;
-    border-left: 5px solid #00d9ff;
+    border-left: 6px solid #00d9ff;
     border-radius: 8px;
-    padding: 0.9rem 1.1rem;
+    padding: 1rem 1.2rem;
     margin-bottom: 0.8rem;
-    font-size: 0.9rem;
+    font-size: 0.92rem;
     font-weight: 700;
     color: #e6edf3;
 }
-.rec-card.rc-0 { border-left-color: #00d9ff; }
-.rec-card.rc-1 { border-left-color: #00e676; }
-.rec-card.rc-2 { border-left-color: #ffd60a; }
-.rec-card.rc-3 { border-left-color: #ff9100; }
-.rec-card.rc-4 { border-left-color: #ff2d95; }
-.rec-card.rc-5 { border-left-color: #a855f7; }
-.rec-card.rc-6 { border-left-color: #1e90ff; }
+.rec-card.rc-low { border-left-color: #00e676; }
+.rec-card.rc-mod { border-left-color: #ffd60a; }
+.rec-card.rc-high { border-left-color: #ff3b3b; }
 
-/* Insight box */
-.insight-box {
-    background-color: #161b22;
-    border: 2px solid #00d9ff;
-    border-radius: 10px;
-    padding: 1.2rem 1.5rem;
+.sidebar-logo {
     text-align: center;
-}
-.insight-value {
-    font-size: 2rem;
-    font-weight: 800;
-    color: #00d9ff;
-}
-
-/* Glass card (used in export section) */
-.glass-card {
-    background-color: #161b22;
-    border: 2px solid #30363d;
-    border-radius: 10px;
-    padding: 1.2rem;
-    margin-bottom: 1rem;
-}
-.glass-card strong {
-    color: #00d9ff;
+    padding: 1rem 0;
+    border-bottom: 2px solid #00d9ff;
+    margin-bottom: 1.5rem;
 }
 </style>
 """, unsafe_allow_html=True)
 
-# ─── FOOD DATABASE & CONSTANTS ────────────────────────────────────────────────
+# ─── EXPANDED 2X FOOD DATABASE WITH METABOLIC TRACERS ─────────────────────────
+# Expanded food item profiling with explicit Glycemic Index (GI) speeds
 FOOD_DB = {
-    "Cooked Rice (white) (100 g)": {"calories": 130.0, "carbs": 28.0, "protein": 2.7, "fat": 0.3},
-    "Wheat Roti / Chapati (1 medium (40 g))": {"calories": 104.0, "carbs": 20.0, "protein": 3.0, "fat": 1.7},
-    "Paneer (100 g)": {"calories": 265.0, "carbs": 1.2, "protein": 18.3, "fat": 20.8},
-    "Curd / Yogurt (Dahi) (100 g)": {"calories": 60.0, "carbs": 4.7, "protein": 3.5, "fat": 3.3},
-    "Apple (1 medium (150 g))": {"calories": 78.0, "carbs": 21.0, "protein": 0.4, "fat": 0.3},
-    "Banana (1 medium (120 g))": {"calories": 105.0, "carbs": 27.0, "protein": 1.3, "fat": 0.4},
-    "Chicken (cooked, breast) (100 g)": {"calories": 165.0, "carbs": 0.0, "protein": 31.0, "fat": 3.6},
-    "Egg (whole, boiled) (1 large (50 g))": {"calories": 78.0, "carbs": 0.6, "protein": 6.3, "fat": 5.3},
-    "Oats (cooked with milk) (1 bowl (200 g))": {"calories": 180.0, "carbs": 28.0, "protein": 7.0, "fat": 4.0},
-    "Milk (whole/full cream) (1 glass (200 ml))": {"calories": 134.0, "carbs": 9.6, "protein": 6.4, "fat": 8.0},
+    # Original Base Elements
+    "Cooked Rice (white) (100 g)": {"calories": 130.0, "carbs": 28.0, "protein": 2.7, "fat": 0.3, "gi": 73},
+    "Wheat Roti / Chapati (1 medium (40 g))": {"calories": 104.0, "carbs": 20.0, "protein": 3.0, "fat": 1.7, "gi": 62},
+    "Whole Wheat Flour (Atta) (100 g (raw))": {"calories": 341.0, "carbs": 72.0, "protein": 12.0, "fat": 1.7, "gi": 65},
+    "Basmati Rice (cooked) (100 g)": {"calories": 121.0, "carbs": 25.0, "protein": 2.7, "fat": 0.4, "gi": 58},
+    "Idli (2 pieces (~70 g))": {"calories": 78.0, "carbs": 16.0, "protein": 2.5, "fat": 0.4, "gi": 65},
+    "Dosa (plain) (1 medium (~80 g))": {"calories": 168.0, "carbs": 28.0, "protein": 3.9, "fat": 3.7, "gi": 66},
+    "Poha (flattened rice) (1 bowl (150 g cooked))": {"calories": 180.0, "carbs": 38.0, "protein": 3.6, "fat": 1.8, "gi": 75},
+    "Upma (semolina) (1 bowl (150 g cooked))": {"calories": 200.0, "carbs": 32.0, "protein": 4.5, "fat": 6.0, "gi": 68},
+    "Paratha (plain, with oil) (1 medium (60 g))": {"calories": 210.0, "carbs": 27.0, "protein": 4.0, "fat": 9.0, "gi": 60},
+    "Puri (1 piece (25 g))": {"calories": 101.0, "carbs": 11.0, "protein": 1.7, "fat": 5.5, "gi": 67},
+    "Toor / Arhar Dal (cooked) (1 bowl (150 g))": {"calories": 170.0, "carbs": 28.0, "protein": 10.5, "fat": 1.5, "gi": 42},
+    "Moong Dal (cooked) (1 bowl (150 g))": {"calories": 150.0, "carbs": 25.0, "protein": 10.0, "fat": 0.6, "gi": 38},
+    "Chana Dal (cooked) (1 bowl (150 g))": {"calories": 210.0, "carbs": 34.0, "protein": 12.0, "fat": 3.0, "gi": 35},
+    "Rajma (Kidney Beans, cooked) (1 bowl (150 g))": {"calories": 165.0, "carbs": 30.0, "protein": 10.5, "fat": 0.6, "gi": 44},
+    "Chole (Chickpeas, cooked) (1 bowl (150 g))": {"calories": 210.0, "carbs": 34.0, "protein": 11.0, "fat": 3.0, "gi": 46},
+    "Paneer (100 g)": {"calories": 265.0, "carbs": 1.2, "protein": 18.3, "fat": 20.8, "gi": 15},
+    "Curd / Yogurt (Dahi) (100 g)": {"calories": 60.0, "carbs": 4.7, "protein": 3.5, "fat": 3.3, "gi": 28},
+    "Milk (whole/full cream) (1 glass (200 ml))": {"calories": 134.0, "carbs": 9.6, "protein": 6.4, "fat": 8.0, "gi": 31},
+    "Buttermilk (Chaas) (1 glass (200 ml))": {"calories": 40.0, "carbs": 3.6, "protein": 2.0, "fat": 1.8, "gi": 25},
+    "Ghee (1 tsp (5 g))": {"calories": 45.0, "carbs": 0.0, "protein": 0.0, "fat": 5.0, "gi": 0},
+    "Butter (1 tsp (5 g))": {"calories": 36.0, "carbs": 0.0, "protein": 0.0, "fat": 4.1, "gi": 0},
+    "Egg (whole, boiled) (1 large (50 g))": {"calories": 78.0, "carbs": 0.6, "protein": 6.3, "fat": 5.3, "gi": 0},
+    "Chicken (cooked, breast) (100 g)": {"calories": 165.0, "carbs": 0.0, "protein": 31.0, "fat": 3.6, "gi": 0},
+    "Mutton (cooked) (100 g)": {"calories": 250.0, "carbs": 0.0, "protein": 25.0, "fat": 16.0, "gi": 0},
+    "Fish (Rohu, cooked) (100 g)": {"calories": 105.0, "carbs": 0.0, "protein": 20.0, "fat": 2.4, "gi": 0},
+    "Potato (boiled) (100 g)": {"calories": 87.0, "carbs": 20.0, "protein": 1.9, "fat": 0.1, "gi": 78},
+    "Onion (raw) (100 g)": {"calories": 40.0, "carbs": 9.3, "protein": 1.1, "fat": 0.1, "gi": 15},
+    "Tomato (raw) (100 g)": {"calories": 18.0, "carbs": 3.9, "protein": 0.9, "fat": 0.2, "gi": 15},
+    "Spinach / Palak (cooked) (100 g)": {"calories": 23.0, "carbs": 3.6, "protein": 2.9, "fat": 0.4, "gi": 15},
+    "Cauliflower (cooked) (100 g)": {"calories": 25.0, "carbs": 5.0, "protein": 1.8, "fat": 0.3, "gi": 15},
+    "Bhindi / Okra (cooked) (100 g)": {"calories": 35.0, "carbs": 7.5, "protein": 2.0, "fat": 0.2, "gi": 20},
+    "Brinjal / Baingan (cooked) (100 g)": {"calories": 25.0, "carbs": 5.9, "protein": 1.0, "fat": 0.2, "gi": 15},
+    "Green Peas (cooked) (100 g)": {"calories": 84.0, "carbs": 14.5, "protein": 5.4, "fat": 0.4, "gi": 48},
+    "Carrot (raw) (100 g)": {"calories": 41.0, "carbs": 9.6, "protein": 0.9, "fat": 0.2, "gi": 35},
+    "Cucumber (raw) (100 g)": {"calories": 15.0, "carbs": 3.6, "protein": 0.7, "fat": 0.1, "gi": 15},
+    "Banana (1 medium (120 g))": {"calories": 105.0, "carbs": 27.0, "protein": 1.3, "fat": 0.4, "gi": 51},
+    "Apple (1 medium (150 g))": {"calories": 78.0, "carbs": 21.0, "protein": 0.4, "fat": 0.3, "gi": 39},
+    "Mango (1 medium (200 g))": {"calories": 120.0, "carbs": 30.0, "protein": 1.6, "fat": 0.6, "gi": 56},
+    "Papaya (100 g)": {"calories": 43.0, "carbs": 11.0, "protein": 0.5, "fat": 0.3, "gi": 59},
+    "Orange (1 medium (130 g))": {"calories": 62.0, "carbs": 15.5, "protein": 1.2, "fat": 0.2, "gi": 43},
+    "Peanuts (roasted) (30 g (handful))": {"calories": 170.0, "carbs": 6.0, "protein": 7.7, "fat": 14.5, "gi": 14},
+    "Almonds (10 pieces (12 g))": {"calories": 70.0, "carbs": 2.6, "protein": 2.6, "fat": 6.0, "gi": 10},
+    "Cashews (10 pieces (15 g))": {"calories": 87.0, "carbs": 4.9, "protein": 2.8, "fat": 7.0, "gi": 22},
+    "Coconut (fresh) (30 g piece)": {"calories": 106.0, "carbs": 4.6, "protein": 1.0, "fat": 10.1, "gi": 45},
+    "Tea (with milk & sugar) (1 cup (150 ml))": {"calories": 55.0, "carbs": 8.5, "protein": 1.2, "fat": 1.8, "gi": 60},
+    "Coffee (with milk & sugar) (1 cup (150 ml))": {"calories": 60.0, "carbs": 9.0, "protein": 1.5, "fat": 1.8, "gi": 60},
+    "Sugar (1 tsp (5 g))": {"calories": 19.0, "carbs": 5.0, "protein": 0.0, "fat": 0.0, "gi": 65},
+    "Jaggery (Gur) (1 tsp (5 g))": {"calories": 19.0, "carbs": 4.8, "protein": 0.0, "fat": 0.0, "gi": 84},
+    "Samosa (1 piece (60 g))": {"calories": 260.0, "carbs": 24.0, "protein": 3.5, "fat": 17.0, "gi": 75},
+    "Glucose Biscuits (4 biscuits (25 g))": {"calories": 110.0, "carbs": 19.0, "protein": 1.7, "fat": 3.2, "gi": 80},
+    "Aloo Gobi (1 bowl (150 g))": {"calories": 150.0, "carbs": 18.0, "protein": 3.5, "fat": 7.0, "gi": 65},
+    "Baingan Bharta (1 bowl (150 g))": {"calories": 130.0, "carbs": 12.0, "protein": 2.5, "fat": 8.0, "gi": 25},
+    "Palak Paneer (1 bowl (150 g))": {"calories": 220.0, "carbs": 8.0, "protein": 9.0, "fat": 16.0, "gi": 30},
+    "Matar Paneer (1 bowl (150 g))": {"calories": 230.0, "carbs": 12.0, "protein": 10.0, "fat": 15.0, "gi": 45},
+    "Bhindi Masala (1 bowl (150 g))": {"calories": 140.0, "carbs": 10.0, "protein": 3.0, "fat": 9.0, "gi": 40},
+    "Dum Aloo (1 bowl (150 g))": {"calories": 200.0, "carbs": 20.0, "protein": 3.0, "fat": 12.0, "gi": 70},
+    "Aloo Methi (1 bowl (150 g))": {"calories": 160.0, "carbs": 17.0, "protein": 3.5, "fat": 8.0, "gi": 58},
+    "Lauki Sabzi (Bottle Gourd) (1 bowl (150 g))": {"calories": 90.0, "carbs": 10.0, "protein": 2.0, "fat": 4.0, "gi": 20},
+    "Kaddu Sabzi (Pumpkin) (1 bowl (150 g))": {"calories": 95.0, "carbs": 12.0, "protein": 2.0, "fat": 4.0, "gi": 65},
+    "Karela Sabzi (Bitter Gourd) (1 bowl (150 g))": {"calories": 110.0, "carbs": 9.0, "protein": 2.5, "fat": 7.0, "gi": 24},
+    "Gajar Matar (Carrot Peas) (1 bowl (150 g))": {"calories": 120.0, "carbs": 15.0, "protein": 4.0, "fat": 4.0, "gi": 50},
+    "Cabbage Sabzi (1 bowl (150 g))": {"calories": 100.0, "carbs": 11.0, "protein": 2.5, "fat": 5.0, "gi": 26},
+    "Mixed Vegetable Curry (1 bowl (150 g))": {"calories": 150.0, "carbs": 15.0, "protein": 4.0, "fat": 8.0, "gi": 55},
+    "Kofta Curry (2 kofta + gravy (150 g))": {"calories": 260.0, "carbs": 18.0, "protein": 6.0, "fat": 18.0, "gi": 68},
+    "Butter Chicken (1 bowl (200 g))": {"calories": 350.0, "carbs": 10.0, "protein": 20.0, "fat": 25.0, "gi": 35},
+    "Chicken Tikka Masala (1 bowl (200 g))": {"calories": 320.0, "carbs": 10.0, "protein": 24.0, "fat": 20.0, "gi": 35},
+    "Egg Curry (2 eggs + gravy (200 g))": {"calories": 280.0, "carbs": 10.0, "protein": 14.0, "fat": 20.0, "gi": 30},
+    "Fish Curry (1 bowl (200 g))": {"calories": 220.0, "carbs": 6.0, "protein": 20.0, "fat": 13.0, "gi": 25},
+    "Prawn Curry (1 bowl (200 g))": {"calories": 200.0, "carbs": 6.0, "protein": 18.0, "fat": 12.0, "gi": 25},
+    "Mutton Rogan Josh (1 bowl (200 g))": {"calories": 350.0, "carbs": 8.0, "protein": 22.0, "fat": 25.0, "gi": 30},
+    "Naan (1 piece (90 g))": {"calories": 260.0, "carbs": 45.0, "protein": 7.0, "fat": 6.0, "gi": 71},
+    "Kulcha (1 piece (80 g))": {"calories": 230.0, "carbs": 38.0, "protein": 6.0, "fat": 6.0, "gi": 70},
+    "Bhatura (1 piece (80 g))": {"calories": 280.0, "carbs": 35.0, "protein": 6.0, "fat": 13.0, "gi": 76},
+    "Missi Roti (1 piece (50 g))": {"calories": 120.0, "carbs": 20.0, "protein": 4.0, "fat": 3.0, "gi": 48},
+    "Thepla (1 piece (40 g))": {"calories": 110.0, "carbs": 15.0, "protein": 3.0, "fat": 4.0, "gi": 52},
+    "Chicken Biryani (1 plate (250 g))": {"calories": 450.0, "carbs": 55.0, "protein": 20.0, "fat": 15.0, "gi": 65},
+    "Veg Pulao (1 plate (200 g))": {"calories": 300.0, "carbs": 50.0, "protein": 6.0, "fat": 8.0, "gi": 68},
+    "Curd Rice (1 bowl (200 g))": {"calories": 220.0, "carbs": 35.0, "protein": 6.0, "fat": 5.0, "gi": 54},
+    "Lemon Rice (1 bowl (200 g))": {"calories": 250.0, "carbs": 40.0, "protein": 5.0, "fat": 8.0, "gi": 60},
+    "Khichdi (1 bowl (200 g))": {"calories": 220.0, "carbs": 35.0, "protein": 7.0, "fat": 5.0, "gi": 55},
+    "Jeera Rice (1 bowl (150 g))": {"calories": 220.0, "carbs": 38.0, "protein": 4.0, "fat": 5.0, "gi": 64},
+    "Sambar (1 bowl (200 g))": {"calories": 150.0, "carbs": 20.0, "protein": 6.0, "fat": 4.0, "gi": 45},
+    "Rasam (1 bowl (150 g))": {"calories": 60.0, "carbs": 8.0, "protein": 2.0, "fat": 2.0, "gi": 40},
+    "Uttapam (1 piece (100 g))": {"calories": 160.0, "carbs": 25.0, "protein": 4.0, "fat": 5.0, "gi": 65},
+    "Medu Vada (2 pieces (80 g))": {"calories": 180.0, "carbs": 18.0, "protein": 5.0, "fat": 10.0, "gi": 43},
+    "Appam (1 piece (60 g))": {"calories": 120.0, "carbs": 22.0, "protein": 2.0, "fat": 2.0, "gi": 50},
+    "Mixed Vegetable Pakora (100 g)": {"calories": 280.0, "carbs": 25.0, "protein": 5.0, "fat": 18.0, "gi": 60},
+    "Kachori (1 piece (60 g))": {"calories": 220.0, "carbs": 25.0, "protein": 4.0, "fat": 12.0, "gi": 72},
+    "Dhokla (2 pieces (80 g))": {"calories": 160.0, "carbs": 25.0, "protein": 5.0, "fat": 4.0, "gi": 35},
+    "Vada Pav (1 piece (120 g))": {"calories": 290.0, "carbs": 40.0, "protein": 7.0, "fat": 11.0, "gi": 71},
+    "Pav Bhaji (1 plate (250 g))": {"calories": 400.0, "carbs": 50.0, "protein": 8.0, "fat": 18.0, "gi": 69},
+    "Bhel Puri (1 plate (140 g))": {"calories": 220.0, "carbs": 35.0, "protein": 5.0, "fat": 7.0, "gi": 65},
+    "Sev Puri (6 pieces (120 g))": {"calories": 280.0, "carbs": 35.0, "protein": 5.0, "fat": 13.0, "gi": 68},
+    "Aloo Tikki (2 pieces (100 g))": {"calories": 220.0, "carbs": 28.0, "protein": 4.0, "fat": 10.0, "gi": 66},
+    "Sprouts Salad (Moong) (100 g)": {"calories": 150.0, "carbs": 20.0, "protein": 9.0, "fat": 3.0, "gi": 25},
+    "Oats (cooked with milk) (1 bowl (200 g))": {"calories": 180.0, "carbs": 28.0, "protein": 7.0, "fat": 4.0, "gi": 55},
+    "Cornflakes with Milk (1 bowl (150 g))": {"calories": 180.0, "carbs": 32.0, "protein": 5.0, "fat": 3.0, "gi": 77},
+    "Gulab Jamun (2 pieces (80 g))": {"calories": 300.0, "carbs": 40.0, "protein": 4.0, "fat": 14.0, "gi": 82},
+    "Jalebi (100 g)": {"calories": 350.0, "carbs": 60.0, "protein": 2.0, "fat": 12.0, "gi": 88},
+    "Kheer (1 bowl (150 g))": {"calories": 230.0, "carbs": 35.0, "protein": 5.0, "fat": 8.0, "gi": 70},
+
+    # --- BRAND NEW EXCLUSIVE COMPLEMENTARY DATAPOINTS (2X EXPANSION) ---
+    "Quinoa (cooked) (100 g)": {"calories": 120.0, "carbs": 21.3, "protein": 4.4, "fat": 1.9, "gi": 53},
+    "Brown Rice (cooked) (100 g)": {"calories": 111.0, "carbs": 23.0, "protein": 2.6, "fat": 0.9, "gi": 55},
+    "Millet Roti (Bajra) (1 piece (50 g))": {"calories": 135.0, "carbs": 24.0, "protein": 3.6, "fat": 2.1, "gi": 54},
+    "Ragi Mudde / Finger Millet Ball (100 g)": {"calories": 125.0, "carbs": 27.0, "protein": 2.2, "fat": 0.6, "gi": 59},
+    "Oat Bran Bread (1 slice (30 g))": {"calories": 72.0, "carbs": 12.0, "protein": 3.1, "fat": 1.1, "gi": 44},
+    "Chia Seeds (1 tbsp (12 g))": {"calories": 60.0, "carbs": 5.0, "protein": 2.0, "fat": 4.0, "gi": 5},
+    "Flaxseeds (ground) (1 tbsp (7 g))": {"calories": 37.0, "carbs": 2.0, "protein": 1.3, "fat": 3.0, "gi": 10},
+    "Soya Chunks Curry (1 bowl (150 g))": {"calories": 160.0, "carbs": 11.0, "protein": 18.0, "fat": 5.0, "gi": 20},
+    "Tofu Stir-Fry (100 g)": {"calories": 95.0, "carbs": 2.5, "protein": 10.1, "fat": 5.5, "gi": 15},
+    "Broccoli (steamed) (100 g)": {"calories": 35.0, "carbs": 7.0, "protein": 2.8, "fat": 0.4, "gi": 15},
+    "Mushroom Masala (1 bowl (150 g))": {"calories": 120.0, "carbs": 8.0, "protein": 4.5, "fat": 8.0, "gi": 25},
+    "Avocado (half medium (80 g))": {"calories": 130.0, "carbs": 6.8, "protein": 1.5, "fat": 11.7, "gi": 10},
+    "Greek Yogurt (plain, unsweetened) (100 g)": {"calories": 59.0, "carbs": 3.6, "protein": 10.0, "fat": 0.4, "gi": 12},
+    "Walnuts (5 whole (15 g))": {"calories": 98.0, "carbs": 2.1, "protein": 2.3, "fat": 9.8, "gi": 15},
+    "Pistachios (salted) (20 pieces (20 g))": {"calories": 112.0, "carbs": 5.5, "protein": 4.0, "fat": 9.0, "gi": 18},
+    "Pumpkin Seeds (2 tbsp (15 g))": {"calories": 85.0, "carbs": 2.2, "protein": 4.5, "fat": 7.0, "gi": 15},
+    "Lentil Soup (Dal Shorba) (200 ml)": {"calories": 140.0, "carbs": 22.0, "protein": 8.5, "fat": 2.0, "gi": 32},
+    "Hummus (2 tbsp (30 g))": {"calories": 50.0, "carbs": 4.0, "protein": 1.5, "fat": 3.5, "gi": 25},
+    "Whole Wheat Pasta (cooked) (100 g)": {"calories": 124.0, "carbs": 25.0, "protein": 5.3, "fat": 0.6, "gi": 48},
+    "Sweet Potato (baked) (100 g)": {"calories": 90.0, "carbs": 20.7, "protein": 2.0, "fat": 0.1, "gi": 63},
+    "Blueberries (1 cup (150 g))": {"calories": 84.0, "carbs": 21.0, "protein": 1.1, "fat": 0.5, "gi": 53},
+    "Strawberries (1 cup slices (150 g))": {"calories": 49.0, "carbs": 11.7, "protein": 1.0, "fat": 0.5, "gi": 40},
+    "Dark Chocolate (85% Cocoa) (20 g square)": {"calories": 120.0, "carbs": 7.0, "protein": 2.0, "fat": 10.0, "gi": 20},
+    "Green Tea (unfiltered, no sugar) (250 ml)": {"calories": 2.0, "carbs": 0.0, "protein": 0.2, "fat": 0.0, "gi": 0},
+    "Almond Milk (unsweetened) (1 glass (200 ml))": {"calories": 30.0, "carbs": 1.0, "protein": 1.0, "fat": 2.5, "gi": 20},
+    "Soy Milk (plain, unsweetened) (200 ml)": {"calories": 80.0, "carbs": 4.0, "protein": 7.0, "fat": 4.0, "gi": 30},
+    "Honey (1 tsp (7 g))": {"calories": 21.0, "carbs": 5.6, "protein": 0.0, "fat": 0.0, "gi": 58},
+    "Maple Syrup (pure) (1 tsp (7 g))": {"calories": 18.0, "carbs": 4.7, "protein": 0.0, "fat": 0.0, "gi": 54},
+    "Croissant (1 small (40 g))": {"calories": 160.0, "carbs": 18.0, "protein": 3.3, "fat": 8.4, "gi": 67},
+    "French Fries (medium log (100 g))": {"calories": 312.0, "carbs": 41.0, "protein": 3.4, "fat": 15.0, "gi": 75},
+    "Pizza Margherita (1 slice (100 g))": {"calories": 266.0, "carbs": 30.0, "protein": 11.0, "fat": 10.0, "gi": 64},
+    "Burger (Veg Patty) (1 unit (150 g))": {"calories": 340.0, "carbs": 42.0, "protein": 12.0, "fat": 13.0, "gi": 66},
+    "Instant Noodles (1 pack prepared (70 g))": {"calories": 310.0, "carbs": 44.0, "protein": 6.0, "fat": 12.0, "gi": 73},
+    "Potato Chips (1 small bag (30 g))": {"calories": 155.0, "carbs": 16.0, "protein": 2.0, "fat": 10.0, "gi": 70},
+    "Soft Drink / Cola (1 can (330 ml))": {"calories": 140.0, "carbs": 39.0, "protein": 0.0, "fat": 0.0, "gi": 63},
+    "Fruit Juice (Packaged Orange) (200 ml)": {"calories": 95.0, "carbs": 22.0, "protein": 1.4, "fat": 0.2, "gi": 65},
+    "Rasgulla (2 pieces (80 g))": {"calories": 210.0, "carbs": 44.0, "protein": 4.0, "fat": 2.0, "gi": 70},
+    "Barfi (Milk-based) (1 piece (30 g))": {"calories": 130.0, "carbs": 18.0, "protein": 3.0, "fat": 5.0, "gi": 75},
+    "Laddu (Besan) (1 piece (40 g))": {"calories": 180.0, "carbs": 25.0, "protein": 4.0, "fat": 8.0, "gi": 72},
 }
 
 INSULIN_TYPES = [
     "No Insulin",
-    "Rapid-Acting (e.g., Lispro, Aspart)",
-    "Short-Acting (Regular)",
-    "Intermediate-Acting (NPH)",
+    "Rapid-Acting (e.g., Lispro, Aspart)", 
+    "Short-Acting (Regular)", 
+    "Intermediate-Acting (NPH)", 
     "Long-Acting (Glargine, Detemir)",
     "Mixed Insulin (70/30)",
 ]
 
-# ─── CORE MODEL & HELPERS ─────────────────────────────────────────────────────
+# ─── HIGH-PRECISION PHYSIOLOGICAL SIMULATION SYSTEM ─────────────────────────
+
 def calculate_bmi(weight_kg: float, height_cm: float) -> tuple[float, str]:
     if height_cm <= 0 or weight_kg <= 0:
         return 0.0, "N/A"
     bmi = weight_kg / ((height_cm / 100) ** 2)
-    if bmi < 18.5:
-        cat = "Underweight"
-    elif bmi < 25:
-        cat = "Normal"
-    elif bmi < 30:
-        cat = "Overweight"
-    else:
-        cat = "Obese"
+    if bmi < 18.5:   cat = "Underweight"
+    elif bmi < 25:   cat = "Normal"
+    elif bmi < 30:   cat = "Overweight"
+    else:            cat = "Obese"
     return round(bmi, 1), cat
+
 
 def _smoothstep(edge0: float, edge1: float, x: float) -> float:
     if edge0 == edge1:
         return 0.0 if x < edge0 else 1.0
     t = max(0.0, min(1.0, (x - edge0) / (edge1 - edge0)))
     return t * t * (3.0 - 2.0 * t)
+
 
 INSULIN_ACTION_PROFILE = {
     "No Insulin":                           {"onset": 0,   "peak": 0,   "end": 1},
@@ -471,21 +387,19 @@ CARB_RESPONSE_PROFILE = {
     "Type 1 Diabetes":  {"peak": 60,  "decay": 165},
 }
 
+
 def _cumulative_insulin_fraction(minutes: float, onset: float, peak: float, end: float) -> float:
-    if minutes <= onset:
-        return 0.0
-    if minutes <= peak:
-        return 0.5 * _smoothstep(onset, peak, minutes)
-    if minutes <= end:
-        return 0.5 + 0.5 * _smoothstep(peak, end, minutes)
+    if minutes <= onset: return 0.0
+    if minutes <= peak:  return 0.5 * _smoothstep(onset, peak, minutes)
+    if minutes <= end:   return 0.5 + 0.5 * _smoothstep(peak, end, minutes)
     return 1.0
+
 
 def _carb_excursion_fraction(minutes: float, peak: float, decay: float) -> float:
     if minutes <= peak:
         return _smoothstep(0, peak, minutes)
-    if minutes <= (peak + decay):
-        return 1.0 - _smoothstep(peak, peak + decay, minutes)
-    return 0.0
+    return 1.0 - _smoothstep(peak, peak + decay, minutes)
+
 
 def _estimate_bmr(weight_kg: float, age: int = 35, gender: str = "Male") -> float:
     weight_kg = max(weight_kg, 30.0)
@@ -495,688 +409,604 @@ def _estimate_bmr(weight_kg: float, age: int = 35, gender: str = "Male") -> floa
         bmr = 10 * weight_kg + 6.25 * 170 - 5 * age + 5
     return max(1200.0, bmr)
 
+
 def glucose_prediction_model(
-    current_glucose: float, carbs_g: float, diabetes_type: str, 
-    insulin_type: str, insulin_dose: float, time_since_injection_hr: float = 0.0,
-    weight_kg: float = 70.0, age: int = 35, gender: str = "Male", 
-    calories_kcal: float = 0.0, time_since_meal_hr: float = 0.0,
-    exercise_type: str = "No Exercise", exercise_duration_min: float = 0.0
-) -> dict[int, float]:
-    weight_kg = weight_kg if weight_kg and weight_kg > 0 else 70.0
-    carb_factor = {"No Diabetes": 1.1, "Prediabetes": 1.6, "Type 2 Diabetes": 2.2, "Type 1 Diabetes": 3.0}.get(diabetes_type, 1.6)
-    carb_peak_rise = carbs_g * carb_factor
-    carb_profile = CARB_RESPONSE_PROFILE.get(diabetes_type, CARB_RESPONSE_PROFILE["Prediabetes"])
-    meal_elapsed_min = time_since_meal_hr * 60.0
+    current_glucose: float,
+    carbs_g: float,
+    diabetes_type: str,
+    insulin_type: str,
+    insulin_dose: float,
+    time_since_injection_hr: float,
+    weight_kg: float,
+    age: int,
+    gender: str,
+    calories_kcal: float,
+    time_since_meal_hr: float,
+    exercise_type: str,
+    exercise_duration_min: float,
+    avg_gi: float = 55.0,
+    stress_level: str = "Normal",
+    dawn_effect: bool = False
+) -> dict:
+    """
+    Advanced physical/physiological engine with continuous data tracking across a 240-minute window.
+    """
+    timeline = list(range(0, 241, 5))
+    predicted_curve = []
+    
+    # Sensitivities & Scaling Parameters
+    isf = 1800.0 / (weight_kg * 0.5) if diabetes_type == "Type 1 Diabetes" else 2200.0 / (weight_kg * 0.6)
+    if diabetes_type == "No Diabetes": isf *= 1.4
+    elif diabetes_type == "Prediabetes": isf *= 1.1
 
-    def _carb_delta_at(future_min: float) -> float:
-        at_future = _carb_excursion_fraction(meal_elapsed_min + future_min, carb_profile["peak"], carb_profile["decay"])
-        at_now = _carb_excursion_fraction(meal_elapsed_min, carb_profile["peak"], carb_profile["decay"])
-        return carb_peak_rise * (at_future - at_now)
+    cr = (weight_kg * 0.35) if diabetes_type == "Type 1 Diabetes" else (weight_kg * 0.45)
+    
+    # Exercise absorption coefficients
+    ex_mod = 1.0
+    if exercise_type == "Light (walking, yoga)": ex_mod = 1.25
+    elif exercise_type == "Moderate (jogging, cycling)": ex_mod = 1.6
+    elif exercise_type == "Intense (running, gym, sports)": ex_mod = 2.1
+    exercise_drop = (exercise_duration_min * 0.45) * ex_mod
 
-    bmr_kcal_day = _estimate_bmr(weight_kg, age, gender)
-    glucose_distribution_dl = max(60.0, weight_kg * 2.0)
-    HEPATIC_COMPENSATORY_EFFICIENCY = 0.03
+    # Stress & Dawn Modifiers
+    stress_add = 0.0
+    if stress_level == "High / Anxious": stress_add = 25.0
+    elif stress_level == "Illness / Infection": stress_add = 45.0
 
-    def _bmr_drop(minutes: float) -> float:
-        kcal = bmr_kcal_day * (minutes / 1440.0)
-        grams = (kcal / 4.0) * HEPATIC_COMPENSATORY_EFFICIENCY
-        return (grams * 1000.0) / glucose_distribution_dl
+    # Dynamic baseline shifts (BMR extraction)
+    bmr = _estimate_bmr(weight_kg, age, gender)
+    basal_clearance_rate = (bmr / 24.0) * 0.02 
 
-    exercise_rate = {"No Exercise": 0.0, "Light (walking, yoga)": 0.30, "Moderate (jogging, cycling)": 0.70, "Intense (running, gym, sports)": 1.20}.get(exercise_type, 0.0)
+    # Profile lookup
+    i_prof = INSULIN_ACTION_PROFILE.get(insulin_type, {"onset": 0, "peak": 0, "end": 1})
+    c_prof = CARB_RESPONSE_PROFILE.get(diabetes_type, {"peak": 50, "decay": 120})
+    
+    # Adjust peak carb timing via Glycemic Index
+    effective_carb_peak = c_prof["peak"] * (avg_gi / 55.0)
+    effective_carb_decay = c_prof["decay"] * (1.2 if calories_kcal > 600 else 1.0)
 
-    def _exercise_drop(future_min: float) -> float:
-        if exercise_duration_min <= 0 or exercise_type == "No Exercise":
-            return 0.0
-        hours_post = 1.0 + (future_min / 60.0)
-        duration_factor = min(exercise_duration_min, 90.0) / 30.0
-        afterburn_intensity = exercise_rate * 0.30 * duration_factor * (0.5 ** (hours_post / 1.5))
-        return afterburn_intensity * future_min
+    for m in timeline:
+        # 1. Carb Uptake Excursion
+        m_meal = m + (time_since_meal_hr * 60)
+        c_frac = _carb_excursion_fraction(m_meal, effective_carb_peak, effective_carb_decay)
+        carb_impact = 0.0
+        if cr > 0:
+            carb_impact = (carbs_g * (gi_factor := (avg_gi / 50.0))) / cr * 35.0 * c_frac
 
-    insulin_factor_map = {"No Insulin": 0, "Rapid-Acting (e.g., Lispro, Aspart)": 45, "Short-Acting (Regular)": 35, "Intermediate-Acting (NPH)": 25, "Long-Acting (Glargine, Detemir)": 20, "Mixed Insulin (70/30)": 30}
-    weight_adj = max(0.6, min(1.6, 70.0 / weight_kg))
-    factor_per_unit = insulin_factor_map.get(insulin_type, 0) * weight_adj
-    total_insulin_effect = factor_per_unit * (insulin_dose or 0.0)
-    ins_profile = INSULIN_ACTION_PROFILE.get(insulin_type, INSULIN_ACTION_PROFILE["No Insulin"])
-    elapsed_min = max(0.0, time_since_injection_hr) * 60.0
+        # 2. Insulin Action Profile
+        m_ins = m + (time_since_injection_hr * 60)
+        ins_frac = _cumulative_insulin_fraction(m_ins, i_prof["onset"], i_prof["peak"], i_prof["end"])
+        insulin_impact = insulin_dose * isf * ins_frac
 
-    predictions = {}
-    for t in (30, 60, 90, 120):
-        carb_delta = _carb_delta_at(t)
-        already_delivered = _cumulative_insulin_fraction(elapsed_min, ins_profile["onset"], ins_profile["peak"], ins_profile["end"])
-        delivered_by_t = _cumulative_insulin_fraction(elapsed_min + t, ins_profile["onset"], ins_profile["peak"], ins_profile["end"])
-        insulin_delta = total_insulin_effect * max(0.0, delivered_by_t - already_delivered)
-        bmr_delta = _bmr_drop(t)
-        exercise_delta = _exercise_drop(t)
-        predicted = current_glucose + carb_delta - insulin_delta - bmr_delta - exercise_delta
-        fasting_floor = current_glucose * 0.88 if insulin_delta > 5 else current_glucose * 0.95
-        predicted = max(fasting_floor, predicted)
-        predictions[t] = round(min(600.0, predicted), 1)
+        # 3. Time-decay exercise effect
+        ex_frac = _smoothstep(0, max(15.0, exercise_duration_min), float(m))
+        current_ex_drop = exercise_drop * ex_frac
 
-    return predictions
+        # 4. Metabolic Composition Integration
+        basal_drop = basal_clearance_rate * (m / 60.0)
+        
+        # Dawn Effect profile curve
+        dawn_bump = 30.0 * _smoothstep(0, 180, float(m)) if dawn_effect else 0.0
+        stress_bump = stress_add * _smoothstep(0, 90, float(m))
 
-def health_score(glucose: float, bmi: float, diabetes_type: str, predicted_peak: float, carbs: float) -> tuple[float, str]:
-    score = 100.0
-    if glucose < 70 or glucose > 180:
-        score -= 25
-    elif glucose < 80 or glucose > 140:
-        score -= 12
-    elif glucose < 90 or glucose > 120:
-        score -= 5
+        g_t = current_glucose + carb_impact - insulin_impact - current_ex_drop - basal_drop + dawn_bump + stress_bump
+        
+        # Guard floor limits
+        if g_t < 40: g_t = 40.0
+        predicted_curve.append(round(g_t, 1))
 
-    if predicted_peak > 200:
-        score -= 20
-    elif predicted_peak > 160:
-        score -= 10
+    return {
+        "timeline": timeline,
+        "curve": predicted_curve,
+        "pred_30": predicted_curve[timeline.index(30)],
+        "pred_60": predicted_curve[timeline.index(60)],
+        "pred_120": predicted_curve[timeline.index(120)],
+        "pred_240": predicted_curve[timeline.index(240)]
+    }
 
-    if bmi < 16 or bmi >= 35:
-        score -= 20
-    elif bmi < 18.5 or bmi >= 30:
-        score -= 10
-    elif bmi < 17 or bmi >= 27:
-        score -= 4
 
-    dm_penalty = {"No Diabetes": 0, "Prediabetes": 8, "Type 2 Diabetes": 15, "Type 1 Diabetes": 18}
-    score -= dm_penalty.get(diabetes_type, 0)
+def compute_health_analytics(curve: list[float]) -> dict:
+    """
+    Computes time-in-range metrics, metrics variance, and structural safety flags.
+    """
+    arr = np.array(curve)
+    tir = np.sum((arr >= 70) & (arr <= 180)) / len(arr) * 100
+    tbr = np.sum(arr < 70) / len(arr) * 100
+    tar = np.sum(arr > 180) / len(arr) * 100
+    
+    mean_g = np.mean(arr)
+    est_hba1c = (mean_g + 46.7) / 28.7
+    cv = (np.std(arr) / mean_g) * 100 if mean_g > 0 else 0
+    
+    # Grade allocation logic
+    score = 100.0 - (tbr * 1.5) - (tar * 0.4) - (max(0.0, cv - 36) * 0.5)
+    score = max(10.0, min(100.0, score))
+    
+    if score >= 85:   risk = "Low Risk"
+    elif score >= 60: risk = "Moderate Risk"
+    else:            risk = "High Risk"
 
-    if carbs > 80:
-        score -= 10
-    elif carbs > 50:
-        score -= 5
+    return {
+        "score": round(score, 1),
+        "risk": risk,
+        "tir": round(tir, 1),
+        "tbr": round(tbr, 1),
+        "tar": round(tar, 1),
+        "mean": round(mean_g, 1),
+        "hba1c": round(est_hba1c, 2),
+        "cv": round(cv, 1)
+    }
 
-    score = max(0.0, min(100.0, score))
-    if score >= 75:
-        risk = "Low Risk"
-    elif score >= 50:
-        risk = "Medium Risk"
-    else:
-        risk = "High Risk"
-    return round(score, 1), risk
 
-def get_recommendations(diabetes_type: str, glucose: float, predicted_peak: float, bmi: float, bmi_cat: str, carbs: float) -> list[str]:
+def generate_recommendations(analytics: dict, carbs: float, bmi_cat: str) -> list[str]:
     recs = []
-    if glucose < 70:
-        recs.append("⚠️ Current glucose appears low. Consume fast-acting carbs.")
-    elif glucose > 180:
-        recs.append("🔴 Current glucose is elevated. Ensure hydration and consult provider.")
-    elif 80 <= glucose <= 120:
-        recs.append("✅ Glucose is within healthy range.")
+    if analytics["tbr"] > 0:
+        recs.append("🚨 **Hypoglycemia Alert Risk:** Drops below 70 mg/dL detected! Keep fast-acting carbs (15g glucose tablets/juice) nearby.")
+    if analytics["tar"] > 20:
+        recs.append("📈 **Extended Hyperglycemia Risk:** Time-Above-Range is elevated. Look into carbohydrate partitioning or review insulin dosing strategy.")
+    if analytics["cv"] > 36.0:
+        recs.append("🔄 **High Glycemic Variability Detected:** Spikes and crashes indicate rapid absorption. Consider adding healthy fats or fiber to slow absorption.")
+    if bmi_cat in ["Obese", "Overweight"]:
+        recs.append("⚖️ **Metabolic Optimization:** Consider regular active muscle clearance (e.g., a 15-minute postmeal walk) to increase insulin sensitivity.")
+    if carbs > 75:
+        recs.append("🍽️ **High Carb-Density Meal:** Splitting heavy complex loads avoids high peak systemic saturation spikes.")
+    
+    recs.append("💧 Maintain consistent baseline cellular hydration to aid natural kidney filtration thresholds.")
+    return recs[:4]
 
-    if predicted_peak > 200:
-        recs.append("📈 Glucose predicted to rise significantly. A 15-20 min walk helps.")
-    elif predicted_peak > 160:
-        recs.append("📊 Moderate glucose rise predicted. Monitor closely.")
+# ─── REPORTLAB SEAMLESS PDF GENERATOR ──────────────────────────────────────────
 
-    if diabetes_type == "Type 1 Diabetes":
-        recs.append("💉 Consistent carb-counting is essential.")
-    elif diabetes_type == "Type 2 Diabetes":
-        recs.append("🥗 Reducing refined carbs improves control.")
-    elif diabetes_type == "Prediabetes":
-        recs.append("🌿 Reversible with lifestyle changes.")
-    else:
-        recs.append("✅ No diabetes detected. Maintain active lifestyle.")
-
-    if bmi_cat == "Obese":
-        recs.append("⚖️ 5–10% weight reduction improves sensitivity.")
-    elif bmi_cat == "Overweight":
-        recs.append("⚖️ Regular cardio (30 min/day) improves health.")
-
-    if carbs > 80:
-        recs.append("🍽️ High carb intake. Split meals and pair with protein.")
-    recs.append("💧 Hydration (8-10 glasses) supports kidney function.")
-    return recs[:7]
-
-def generate_pdf_report(patient, nutrition, glucose_now, predictions, score, risk, recommendations, bmi, bmi_cat):
+def generate_pdf_report(patient: dict, nutrition: dict, current_glucose: float, analytics: dict, recommendations: list[str]) -> bytes:
     from reportlab.lib.pagesizes import A4
     from reportlab.lib import colors
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib.units import cm
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
-    from reportlab.lib.enums import TA_CENTER
 
     buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=2*cm, rightMargin=2*cm, topMargin=2*cm, bottomMargin=2*cm)
+    doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=1.5*cm, rightMargin=1.5*cm, topMargin=1.5*cm, bottomMargin=1.5*cm)
     styles = getSampleStyleSheet()
     elements = []
 
-    # Title Banner style
-    title_style = ParagraphStyle(
-        'DocTitle', parent=styles['Title'], fontName='Helvetica-Bold', fontSize=24,
-        textColor=colors.HexColor('#0f172a'), spaceAfter=12, alignment=TA_CENTER
-    )
-    elements.append(Paragraph("🩺 GLUCOVISION AI — HEALTH INSIGHT REPORT", title_style))
-    elements.append(HRFlowable(width="100%", thickness=2, color=colors.HexColor('#00d9ff'), spaceAfter=15))
+    # Custom Style Registry
+    title_style = ParagraphStyle('DocTitle', fontName='Helvetica-Bold', fontSize=24, textColor=colors.HexColor('#002855'), spaceAfter=6)
+    sub_style = ParagraphStyle('DocSub', fontName='Helvetica', fontSize=10, textColor=colors.HexColor('#475569'), spaceAfter=12)
+    sec_style = ParagraphStyle('SecHeader', fontName='Helvetica-Bold', fontSize=14, textColor=colors.HexColor('#1e90ff'), spaceBefore=12, spaceAfter=8)
+    body_style = ParagraphStyle('BodyTextCustom', fontName='Helvetica', fontSize=10, textColor=colors.HexColor('#1e293b'), leading=14)
 
-    # Metadata Panel
-    meta_text = f"<b>Patient Profile:</b> {patient.get('name','N/A')} ({patient.get('age','N/A')}y, {patient.get('gender','N/A')}) &nbsp;&nbsp;|&nbsp;&nbsp; <b>Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M')}<br/>" \
-                f"<b>Clinical Status:</b> {patient.get('diabetes_type','N/A')} &nbsp;&nbsp;|&nbsp;&nbsp; <b>BMI:</b> {bmi} ({bmi_cat})"
-    elements.append(Paragraph(meta_text, styles['Normal']))
-    elements.append(Spacer(1, 15))
+    # Document Header Banner
+    elements.append(Paragraph("GLUCOVISION AI - CLINICAL INTERACTION REPORT", title_style))
+    elements.append(Paragraph(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Simulation Metrics Standard", sub_style))
+    elements.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor('#00d9ff'), spaceAfter=10))
 
-    # Metrics Grid Summary Table
-    metric_data = [
-        [Paragraph("<b>Metric</b>", styles['Normal']), Paragraph("<b>Value Assessed</b>", styles['Normal'])],
-        [Paragraph("Current Blood Glucose", styles['Normal']), Paragraph(f"{glucose_now} mg/dL", styles['Normal'])],
-        [Paragraph("Estimated Peak Excursion", styles['Normal']), Paragraph(f"{max(predictions.values())} mg/dL", styles['Normal'])],
-        [Paragraph("Carbohydrates Logged", styles['Normal']), Paragraph(f"{nutrition.get('carbs', 0):.1f} g", styles['Normal'])],
-        [Paragraph("Composite Health Score", styles['Normal']), Paragraph(f"<b>{score} / 100</b> ({risk})", styles['Normal'])]
+    # Patient Data Layout Map
+    elements.append(Paragraph("1. Patient Profile Info", sec_style))
+    p_table_data = [
+        [Paragraph("<b>Parameter</b>", body_style), Paragraph("<b>Value</b>", body_style), Paragraph("<b>Parameter</b>", body_style), Paragraph("<b>Value</b>", body_style)],
+        ["Name", patient.get("name"), "Age / Gender", f"{patient.get('age')} yrs / {patient.get('gender')}"],
+        ["Weight", f"{patient.get('weight')} kg", "Diabetes Profile", patient.get("diabetes")]
     ]
-    t = Table(metric_data, colWidths=[6*cm, 10*cm])
-    t.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (1,0), colors.HexColor('#1e293b')),
-        ('TEXTCOLOR', (0,0), (1,0), colors.white),
-        ('PADDING', (0,0), (-1,-1), 8),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cbd5e1')),
+    t1 = Table(p_table_data, colWidths=[4*cm, 5*cm, 4*cm, 5*cm])
+    t1.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#cbd5e1')),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#94a3b8')),
+        ('PADDING', (0,0), (-1,-1), 6),
     ]))
-    elements.append(t)
-    elements.append(Spacer(1, 15))
+    elements.append(t1)
 
-    # Forecast section
-    elements.append(Paragraph("<b>2-Hour Glucose Response Curve Projection</b>", styles['Heading2']))
-    forecast_text = f"• 30 min forecast: {predictions[30]} mg/dL<br/>• 60 min forecast: {predictions[60]} mg/dL<br/>• 90 min forecast: {predictions[90]} mg/dL<br/>• 120 min forecast: {predictions[120]} mg/dL"
-    elements.append(Paragraph(forecast_text, styles['Normal']))
-    elements.append(Spacer(1, 15))
+    # Health Score Framework
+    elements.append(Paragraph("2. Metabolic Digital Twin Analysis", sec_style))
+    an_table_data = [
+        ["Health Index Score", f"{analytics['score']} / 100", "Risk Tier Category", analytics['risk']],
+        ["Time-In-Range (70-180)", f"{analytics['tir']}%", "Est. HbA1c Level", f"{analytics['hba1c']}%"],
+        ["Glycemic Variance (CV)", f"{analytics['cv']}%", "Mean Glucose Trend", f"{analytics['mean']} mg/dL"]
+    ]
+    t2 = Table(an_table_data, colWidths=[4.5*cm, 4.5*cm, 4.5*cm, 4.5*cm])
+    t2.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#f8fafc')),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cbd5e1')),
+        ('FONTNAME', (0,0), (0,-1), 'Helvetica-Bold'),
+        ('PADDING', (0,0), (-1,-1), 6),
+    ]))
+    elements.append(t2)
 
-    # Clinical Insights section
-    elements.append(Paragraph("<b>AI Actionable Health Recommendations</b>", styles['Heading2']))
+    # Bulleted Strategic Roadmap Recommendations
+    elements.append(Paragraph("3. AI Optimization Directives", sec_style))
     for r in recommendations:
-        elements.append(Paragraph(f"• {r}", styles['Normal']))
-    elements.append(Spacer(1, 20))
+        elements.append(Paragraph(f"• {r}", body_style))
+        elements.append(Spacer(1, 0.15*cm))
 
-    # Science Fair Disclaimer
-    elements.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor('#ef4444'), spaceAfter=10))
-    disclaimer_style = ParagraphStyle('DiscStyle', parent=styles['Normal'], fontSize=8, textColor=colors.HexColor('#7f1d1d'), leading=11)
-    elements.append(Paragraph("<b>IMPORTANT DISCLAIMER:</b> GlucoVision AI is an educational prototype created for science fair demonstration purposes. It is NOT a medical device and is NOT intended for diagnosis, treatment, or clinical decision-making. The predictions and health metrics are generated by educational models and do not reflect real world clinical validation.", disclaimer_style))
+    # Compliance Footer Disclaimer
+    elements.append(Spacer(1, 1*cm))
+    elements.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor('#ef4444')))
+    disclaimer_style = ParagraphStyle('Disclaimer', fontName='Helvetica-Oblique', fontSize=8, textColor=colors.HexColor('#991b1b'), leading=10)
+    elements.append(Paragraph("CRITICAL DISCLAIMER: This document contains structural data produced by a simplified mathematical engineering simulation sandbox. It is intended strictly for education, demonstration, and interface conceptual validation. It does NOT possess medical telemetry authorization or actual diagnostic precision.", disclaimer_style))
 
     doc.build(elements)
-    buf.seek(0)
-    return buf.read()
+    return buf.getvalue()
 
-# ─── VISUALIZATION GRAPH UTILITIES ───────────────────────────────────────────
-CHART_LAYOUT = dict(
-    paper_bgcolor='rgba(10,14,26,0)',
-    plot_bgcolor='rgba(10,14,26,0)',
-    font=dict(family='Inter', color='#94a3b8', size=11),
-    margin=dict(l=10, r=10, t=40, b=10),
-    xaxis=dict(gridcolor='rgba(0,217,255,0.15)', linecolor='rgba(0,217,255,0.25)', zerolinecolor='rgba(0,0,0,0)'),
-    yaxis=dict(gridcolor='rgba(0,217,255,0.15)', linecolor='rgba(0,217,255,0.25)', zerolinecolor='rgba(0,0,0,0)'),
-)
 
-def glucose_trend_chart(glucose_now: float, predictions: dict[int, float]):
-    times = [0, 30, 60, 90, 120]
-    values = [glucose_now] + [predictions[t] for t in [30, 60, 90, 120]]
-    labels = ['Now', '30m', '60m', '90m', '2hr']
+# ─── SIDEBAR MANAGEMENT AND APP NAVIGATION CONTROL ─────────────────────────────
 
-    fig = go.Figure()
-    fig.add_hrect(y0=70, y1=140, fillcolor='rgba(0,230,118,0.12)', line_color='rgba(0,230,118,0.25)', annotation_text='Normal Target Range (70-140 mg/dL)', annotation_position='top left', annotation_font=dict(size=9, color='#00e676'))
-    fig.add_trace(go.Scatter(x=labels, y=values, mode='lines+markers', line=dict(color='#00d9ff', width=3, shape='spline'), fill='tozeroy', fillcolor='rgba(0,217,255,0.12)', marker=dict(size=8, color='#00e676', line=dict(color='#ffffff', width=1.5)), name='Glucose Tracking Line'))
-    fig.update_layout(**CHART_LAYOUT, title=dict(text='Metabolic Curve Forecast Over 2 Hours', font=dict(size=14, color='#e2e8f0', weight=700), x=0.5))
-    return fig
-
-def nutrition_pie_chart(carbs: float, protein: float, fat: float):
-    if carbs == 0 and protein == 0 and fat == 0:
-        carbs, protein, fat = 1.0, 1.0, 1.0
-    fig = go.Figure(go.Pie(labels=['Carbohydrates', 'Protein', 'Fat'], values=[carbs, protein, fat], hole=0.55, marker=dict(colors=['#1e90ff', '#00d9ff', '#a855f7']), textinfo='percent+label', textfont=dict(weight=700)))
-    fig.update_layout(**CHART_LAYOUT, title=dict(text='Meal Macronutrient Composition Matrix', font=dict(size=14, color='#e2e8f0', weight=700), x=0.5), showlegend=False)
-    return fig
-
-def risk_gauge(score: float, risk: str):
-    color = '#00e676' if risk == "Low Risk" else ('#ffd60a' if risk == "Medium Risk" else '#ff3b3b')
-    fig = go.Figure(go.Indicator(
-        mode="gauge+number", value=score,
-        number={'font': {'size': 36, 'color': color, 'family': 'Inter', 'weight': 800}},
-        gauge={
-            'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': '#334155'},
-            'bar': {'color': color, 'thickness': 0.25},
-            'bgcolor': 'rgba(15,23,42,0.5)',
-            'bordercolor': 'rgba(0,217,255,0.2)',
-            'steps': [
-                {'range': [0, 50], 'color': 'rgba(255,59,59,0.05)'},
-                {'range': [50, 75], 'color': 'rgba(255,214,10,0.05)'},
-                {'range': [75, 100], 'color': 'rgba(0,230,118,0.05)'}
-            ]
-        },
-        title={'text': f"Risk State Evaluation: {risk}", 'font': {'color': '#94a3b8', 'size': 13, 'weight': 700}}
-    ))
-    fig.update_layout(**CHART_LAYOUT, height=260)
-    return fig
-
-def calorie_summary_chart(food_log: list[dict]):
-    if not food_log:
-        return go.Figure().update_layout(**CHART_LAYOUT, title=dict(text='No meal components logged yet', x=0.5))
-    labels = [f['name'].split('(')[0].strip() for f in food_log]
-    cals = [f['calories'] for f in food_log]
-    fig = go.Figure(go.Bar(x=cals, y=labels, orientation='h', marker=dict(color=cals, colorscale=[[0, '#1e90ff'], [1, '#00ffc8']], line=dict(color='#ffffff', width=0.5))))
-    fig.update_layout(**CHART_LAYOUT, title=dict(text='Caloric Contribution Map by Selected Food Items', font=dict(size=14, color='#e2e8f0', weight=700), x=0.5))
-    return fig
-
-# ─── APP RENDERING & NAVIGATION FUNCTIONS ──────────────────────────────────────
-def render_sidebar_navigation():
+def render_sidebar():
     with st.sidebar:
         st.markdown("""
         <div class="sidebar-logo">
-            <div style="font-size:2.2rem; margin-bottom:0.3rem">🩺</div>
-            <div class="sidebar-logo-title">GlucoVision AI</div>
-            <div class="sidebar-logo-sub">Glucose Prediction System</div>
+            <div style="font-size:2.5rem; margin-bottom:0.2rem">🩺</div>
+            <div style="font-size:1.5rem; font-weight:800; color:#00d9ff;">GlucoVision AI</div>
+            <div style="font-size:0.75rem; color:#8b949e; font-weight:700; letter-spacing:0.06em;">PRO SIMULATION HUB</div>
         </div>
         """, unsafe_allow_html=True)
-
-        st.markdown(f"👤 **Active User:** `{st.session_state.username}`")
-        if st.session_state.account_type == "PREMIUM":
-            st.markdown("<div style='background-color:#332700; border:1px solid #ffd60a; padding:6px; border-radius:5px; text-align:center; margin-bottom:10px;'><span style='color:#ffd60a; font-weight:800; font-size:0.85rem;'>👑 PREMIUM ACCESS</span></div>", unsafe_allow_html=True)
-        else:
-            st.markdown("<div style='background-color:#1e1b4b; border:1px solid #a855f7; padding:6px; border-radius:5px; text-align:center; margin-bottom:10px;'><span style='color:#c084fc; font-weight:800; font-size:0.85rem;'>🔹 FREE PLAN</span></div>", unsafe_allow_html=True)
-            if st.button("🚀 Upgrade to Premium", use_container_width=True):
-                upgrade_user(st.session_state.username)
-                st.success("Successfully upgraded to Premium plan!")
-                st.rerun()
-
-        st.markdown("### 📋 System Operations Navigation")
-        nav_elements = [
-            ("👤", "Patient Profile Tracker"),
-            ("💉", "Insulin Dosage Calculator"),
-            ("🍽️", "Diet Optimization Index"),
-            ("🔬", "Digital Twin Engine"),
-            ("📈", "AI Real-Time Predictor"),
-            ("📊", "Bio-Metric Visualizations"),
-            ("🧠", "Metabolic Analytics Ledger"),
-            ("💡", "Advanced Health Recommendations " + ("👑" if st.session_state.account_type == "PREMIUM" else "🔒")),
-            ("🔮", "Future Health Trend Insights " + ("👑" if st.session_state.account_type == "PREMIUM" else "🔒")),
-            ("🧠", "MBTI Personality Diet Matcher " + ("👑" if st.session_state.account_type == "PREMIUM" else "🔒")),
-            ("📄", "Export Personalized PDF Report " + ("👑" if st.session_state.account_type == "PREMIUM" else "🔒")),
-        ]
         
-        for icon, title in nav_elements:
-            st.markdown(f'<div class="nav-pill">{icon} &nbsp;{title}</div>', unsafe_allow_html=True)
-
-        st.markdown("---")
-        if st.button("🚪 Logout Account", use_container_width=True):
-            st.session_state.logged_in = False
-            st.session_state.username = None
-            st.session_state.account_type = None
-            st.rerun()
-
-def run_main_application():
-    render_sidebar_navigation()
-
-    # HERO JUMBOTRON HEADER PANEL
-    st.markdown("""
-    <div class="hero-header">
-        <div class="hero-title">🩺 GlucoVision AI</div>
-        <div class="hero-subtitle">AI-POWERED PERSONALIZED DIABETES MONITORING & GLUCOSE PREDICTION SYSTEM</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # CRITICAL SCIENCE FAIR CLINICAL PRACTICE DISCLAIMER
-    st.markdown("""
-    <div class="disclaimer">
-        <strong>⚠️ CRITICAL EDUCATIONAL SYSTEM DISCLAIMER:</strong><br/>
-        This system architecture is built entirely as an educational computer science research prototype demonstration. 
-        It does NOT integrate authenticated hardware diagnostic systems, nor has it received regulatory authorization. It must not be utilized for human healthcare decisions, prescription processing, or formal diagnostic validation.
-    </div>
-    """, unsafe_allow_html=True)
-
-    # ════════════════════════════════════════════════════════════════════════════
-    # SECTION 1: USER DEMOGRAPHICS PROFILE PATIENT DATASET
-    # ════════════════════════════════════════════════════════════════════════════
-    st.markdown('<div class="section-header sh-blue"><div class="section-icon">👤</div><div class="section-title">SECTION 1 — Patient Demographics Profile Dataset</div></div>', unsafe_allow_html=True)
-    with st.container():
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            name = st.text_input("Patient Full Legal Name Identification", value=st.session_state.username)
-            age = st.number_input("Biological Age Matrix (Years)", min_value=1, max_value=115, value=35)
-            gender = st.selectbox("Biological Sex Classification", ["Select Classification", "Male", "Female", "Intersex", "Decline to State"])
-        with col2:
-            weight = st.number_input("Patient Body Mass Coefficient (Kilograms)", min_value=10.0, max_value=300.0, value=74.5, step=0.1)
-            height = st.number_input("Patient Vertical Stature Metric (Centimeters)", min_value=50.0, max_value=250.0, value=174.0, step=0.1)
-        with col3:
-            diabetes_type = st.selectbox("Clinical Pathological Diabetes Classification", ["Select Condition State", "No Diabetes Profile", "Prediabetes Condition", "Type 1 Diabetes Mellitus", "Type 2 Diabetes Mellitus"])
-
-        bmi, bmi_cat = calculate_bmi(weight, height)
-        
-        st.markdown("<br/>", unsafe_allow_html=True)
-        col_m1, col_m2, col_m3 = st.columns(3)
-        col_m1.metric("📊 Computed Body Mass Index (BMI)", f"{bmi}")
-        col_m2.metric("🏷️ Categorical Weight Classification", bmi_cat)
-        col_m3.metric("🧬 Evaluated Pathological Profile", diabetes_type.replace(" Profile","").replace(" Condition","").replace(" Mellitus","") if diabetes_type else "N/A")
-
-    st.markdown("---")
-
-    # ════════════════════════════════════════════════════════════════════════════
-    # SECTION 2: INSULIN DRUG INJECTION MANAGEMENT LOGIC
-    # ════════════════════════════════════════════════════════════════════════════
-    st.markdown('<div class="section-header sh-red"><div class="section-icon">💉</div><div class="section-title">SECTION 2 — Insulin Pharmacology Dosage Vector Input</div></div>', unsafe_allow_html=True)
-    with st.container():
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            if diabetes_type == "No Diabetes Profile":
-                insulin_type = "No Insulin"
-                st.markdown("<p style='color:#00e676 !important;'>💡 Non-diabetic metabolic tracking activated. Insulin configuration bypass engaged.</p>", unsafe_allow_html=True)
-            else:
-                insulin_type = st.selectbox("Pharmacological Insulin Variant Profile", INSULIN_TYPES)
-        with col2:
-            if diabetes_type == "No Diabetes Profile" or insulin_type == "No Insulin":
-                insulin_dose = 0.0
-                st.number_input("Injected Pharmacological Volume (International Units)", min_value=0.0, max_value=0.0, value=0.0, disabled=True)
-            else:
-                insulin_dose = st.number_input("Injected Pharmacological Volume (International Units)", min_value=0.0, max_value=150.0, value=4.5, step=0.5)
-        with col3:
-            if diabetes_type == "No Diabetes Profile" or insulin_type == "No Insulin":
-                time_since_injection = 0.0
-                st.number_input("Time Interval Since Medication Injection (Hours)", min_value=0.0, max_value=0.0, value=0.0, disabled=True)
-            else:
-                time_since_injection = st.number_input("Time Interval Since Medication Injection (Hours)", min_value=0.0, max_value=24.0, value=1.0, step=0.25)
-
-    st.markdown("---")
-
-    # ════════════════════════════════════════════════════════════════════════════
-    # SECTION 3: DIET INTEGRITY & NUTRITIONAL INTELLIGENCE
-    # ════════════════════════════════════════════════════════════════════════════
-    st.markdown('<div class="section-header sh-orange"><div class="section-icon">🍽️</div><div class="section-title">SECTION 3 — Nutritional Intake Intelligence Database Matrix</div></div>', unsafe_allow_html=True)
-    with st.container():
-        selected_foods = st.multiselect("Query & Log Meal Component Ingredients Consumed", options=list(FOOD_DB.keys()), default=[])
-        
-        food_log = []
-        total_cal = 0.0
-        total_carbs = 0.0
-        total_protein = 0.0
-        total_fat = 0.0
-
-        if selected_foods:
-            st.markdown("<p style='font-size:0.85rem; color:#94a3b8;'>Adjust exact ingredient scaling weights below:</p>", unsafe_allow_html=True)
-            food_cols = st.columns(min(len(selected_foods), 4))
-            for idx, food_item in enumerate(selected_foods):
-                with food_cols[idx % 4]:
-                    servings = st.number_input(f"Portion Vector × {food_item.split('(')[0].strip()}", min_value=0.1, max_value=20.0, value=1.0, step=0.1, key=f"food_srv_{idx}")
-                    base_nutr = FOOD_DB[food_item]
-                    
-                    item_cal = base_nutr["calories"] * servings
-                    item_carb = base_nutr["carbs"] * servings
-                    item_prot = base_nutr["protein"] * servings
-                    item_fat = base_nutr["fat"] * servings
-                    
-                    food_log.append({"name": food_item, "calories": item_cal, "carbs": item_carb, "protein": item_prot, "fat": item_fat})
-                    
-                    total_cal += item_cal
-                    total_carbs += item_carb
-                    total_protein += item_prot
-                    total_fat += item_fat
-
-            st.markdown("<br/>", unsafe_allow_html=True)
-            c1, c2, c3, c4 = st.columns(4)
-            c1.metric("🔥 Total Energy Yielded", f"{total_cal:.1f} kcal")
-            c2.metric("🍞 Total Carbs Mass Vector", f"{total_carbs:.1f} g")
-            c3.metric("💪 Total Amino Protein Mass", f"{total_protein:.1f} g")
-            c4.metric("🥑 Total Lipid Fat Density", f"{total_fat:.1f} g")
-        else:
-            st.info("💡 Nutritional ledger empty. Use drop down selectors above to construct current meal simulation parameters.")
-
-    st.markdown("---")
-
-    # ════════════════════════════════════════════════════════════════════════════
-    # SECTION 4: METABOLIC DIGITAL TWIN COMPUTATIONAL SIMULATION
-    # ════════════════════════════════════════════════════════════════════════════
-    st.markdown('<div class="section-header sh-teal"><div class="section-icon">🔬</div><div class="section-title">SECTION 4 — Real-time Metabolic Digital Twin Configuration</div></div>', unsafe_allow_html=True)
-    with st.container():
-        current_glucose = st.slider("🩸 Calibrate Real-time Plasma Blood Glucose Sensor Baseline (mg/dL)", min_value=40, max_value=400, value=112, step=1)
-        
-        predictions = glucose_prediction_model(
-            current_glucose=current_glucose, carbs_g=total_carbs, diabetes_type=diabetes_type.replace(" Profile","").replace(" Condition","").replace(" Mellitus",""),
-            insulin_type=insulin_type, insulin_dose=insulin_dose, time_since_injection_hr=time_since_injection,
-            weight_kg=weight, age=int(age), gender=gender, calories_kcal=total_cal
+        st.markdown("### 📋 Navigation Core")
+        view_mode = st.radio(
+            "Select Interface Panel",
+            ["Full Integrated Ecosystem", "Nutritional Inventory Search", "Digital Twin Calibration"],
+            index=0
         )
         
-        predicted_60 = predictions[60]
-        peak_excursion_val = max(predictions.values())
-        hs, risk = health_score(current_glucose, bmi, diabetes_type.replace(" Profile","").replace(" Condition","").replace(" Mellitus",""), peak_excursion_val, total_carbs)
-
-        st.markdown("<br/>", unsafe_allow_html=True)
-        grid_c1, grid_c2, grid_c3, grid_c4, grid_c5, grid_c6 = st.columns(6)
+        st.markdown("---")
+        st.markdown("### ⚙️ Engine Multi-Modifiers")
+        stress_level = st.selectbox("Current System Stress / Illness Level", ["Normal", "High / Anxious", "Illness / Infection"])
+        dawn_effect = st.checkbox("Simulate Dawn Phenomenon (Cortisol Spike Effect)", value=False)
         
-        metrics_data_cards = [
-            (grid_c1, '🩸', f"{current_glucose}", "Live Glucose"),
-            (grid_c2, '📈', f"{predicted_60}", "Twin Pred (60m)"),
-            (grid_c3, '🔥', f"{total_cal:.0f}", "Energy Vol"),
-            (grid_c4, '🍞', f"{total_carbs:.0f}g", "Active Carbs"),
-            (grid_c5, '⚖️', f"{bmi}", "BMI Stat"),
-            (grid_c6, '💯', f"{hs}", "Health Score")
-        ]
-        
-        for context_col, emoji_sym, data_val, caption_lbl in metrics_data_cards:
-            context_col.markdown(f"""
-            <div class="metric-card">
-                <div class="metric-icon">{emoji_sym}</div>
-                <div class="metric-value">{data_val}</div>
-                <div class="metric-label">{caption_lbl}</div>
-            </div>
-            """, unsafe_allow_html=True)
+        return view_mode, stress_level, dawn_effect
 
-    st.markdown("---")
-
-    # ════════════════════════════════════════════════════════════════════════════
-    # SECTIONS 5, 6, 7: GRAPHICAL PREDICTION CHANNELS & VISUALIZATION FORECASTS
-    # ════════════════════════════════════════════════════════════════════════════
-    st.markdown('<div class="section-header sh-green"><div class="section-icon">📊</div><div class="section-title">SECTIONS 5, 6, 7 — Predictive Visualization Streams & Bio-Metric Graphs</div></div>', unsafe_allow_html=True)
-    with st.container():
-        vis_col1, vis_col2 = st.columns(2)
-        with vis_col1:
-            st.plotly_chart(glucose_trend_chart(current_glucose, predictions), use_container_width=True)
-        with vis_col2:
-            st.plotly_chart(risk_gauge(hs, risk), use_container_width=True)
-
-        vis_col3, vis_col4 = st.columns(2)
-        with vis_col3:
-            st.plotly_chart(nutrition_pie_chart(total_carbs, total_protein, total_fat), use_container_width=True)
-        with vis_col4:
-            st.plotly_chart(calorie_summary_chart(food_log), use_container_width=True)
-
-    st.markdown("---")
-
-    # ════════════════════════════════════════════════════════════════════════════
-    # SECTION 8: ADVANCED HEALTH RECOMMENDATIONS INDEX (PREMIUM)
-    # ════════════════════════════════════════════════════════════════════════════
-    st.markdown('<div class="section-header sh-yellow"><div class="section-icon">💡</div><div class="section-title">SECTION 8 — AI Actionable Health Recommendation Framework</div></div>', unsafe_allow_html=True)
-    if st.session_state.account_type == "PREMIUM":
-        with st.container():
-            recs_list = get_recommendations(
-                diabetes_type=diabetes_type.replace(" Profile","").replace(" Condition","").replace(" Mellitus",""),
-                glucose=current_glucose, predicted_peak=peak_excursion_val, bmi=bmi, bmi_cat=bmi_cat, carbs=total_carbs
-            )
-            for idx, recommendation_item in enumerate(recs_list):
-                st.markdown(f'<div class="rec-card rc-{idx % 7}">{recommendation_item}</div>', unsafe_allow_html=True)
-    else:
-        st.markdown("""
-        <div class="upgrade-box">
-            <div class="upgrade-title">🔒 Premium Health Recommendations Locked</div>
-            <p>Upgrade your account to Premium to unlock AI-generated lifestyle modifications and nutritional balancing alerts based on your real-time metabolic twin status.</p>
-        </div>
-        """, unsafe_allow_html=True)
-    st.markdown("---")
-
-    # ════════════════════════════════════════════════════════════════════════════
-    # SECTION 9: FUTURE HEALTH INSIGHT ENGINE (PREMIUM)
-    # ════════════════════════════════════════════════════════════════════════════
-    st.markdown('<div class="section-header sh-purple"><div class="section-icon">🔮</div><div class="section-title">SECTION 9 — Predictive Future Health Insights Engine</div></div>', unsafe_allow_html=True)
-    if st.session_state.account_type == "PREMIUM":
-        with st.container():
-            percentage_variance = ((predictions[120] - current_glucose) / current_glucose) * 100.0 if current_glucose > 0 else 0
-            variance_vector_direction = "increase" if percentage_variance >= 0 else "decrease"
-            
-            st.markdown(f"""
-            <div class="insight-box">
-                <p>2-Hour Computational Projection Directional Excursion Analysis Index:</p>
-                <div class="insight-value">{abs(percentage_variance):.1f}% Dynamic {variance_vector_direction.capitalize()}</div>
-                <p style="margin-top:0.5rem; font-size:0.88rem; color:#94a3b8 !important;">
-                    The digital clone mathematical matrix forecasts a localized stabilization index at approximately <strong>{predictions[120]} mg/dL</strong> at the 120-minute mark.
-                </p>
-            </div>
-            """, unsafe_allow_html=True)
-    else:
-        st.markdown("""
-        <div class="upgrade-box">
-            <div class="upgrade-title">🔒 Premium Trend Analytics Locked</div>
-            <p>Access advanced longitudinal metabolic modeling, percentage drift analysis, and multi-hour stabilization indexing by upgrading to Premium.</p>
-        </div>
-        """, unsafe_allow_html=True)
-    st.markdown("---")
-
-    # ════════════════════════════════════════════════════════════════════════════
-    # SECTION 10: MBTI DIET PERSONALITY ALIGNMENT ENGINE (PREMIUM)
-    # ════════════════════════════════════════════════════════════════════════════
-    st.markdown('<div class="section-header sh-pink"><div class="section-icon">🧠</div><div class="section-title">SECTION 10 — Cognitive MBTI Personality Diet Alignment Index</div></div>', unsafe_allow_html=True)
-    if st.session_state.account_type == "PREMIUM":
-        with st.container():
-            mbti_profile_selected = st.selectbox("Calibrate Patient Cognitive MBTI Archetype Structure", ["INTJ - The Architect", "INTP - The Logician", "ENTJ - The Commander", "ENTP - The Debater", "INFJ - The Advocate", "INFP - The Mediator", "ENFJ - The Protagonist", "ENFP - The Campaigner", "ISTJ - The Logistician", "ISFJ - The Defender", "ESTJ - The Executive", "ESFJ - The Consul", "ISTP - The Virtuoso", "ISFP - The Adventurer", "ESTP - The Entrepreneur", "ESFP - The Entertainer"])
-            
-            mbti_clean = mbti_profile_selected.split(" - ")[0]
-            st.markdown(f"""
-            <div class="glass-card" style="border-left: 5px solid #ff2d95;">
-                <p style="color:#ff2d95 !important; font-size:1.05rem; font-weight:800; margin-bottom:0.4rem;">🎯 Personalized Behavioral Health Strategy for Archetype Type: {mbti_clean}</p>
-                According to cross-referenced cognitive archetype compliance indexing data, individuals belonging to the <strong>{mbti_clean}</strong> bracket respond with optimal statistical retention to data-driven, structured health parameters. Avoid generic dietary guidelines; prioritize macro tracking and precise scheduling logs to keep your analytic focus engaged with metabolic targets.
-            </div>
-            """, unsafe_allow_html=True)
-    else:
-        st.markdown("""
-        <div class="upgrade-box">
-            <div class="upgrade-title">🔒 Premium MBTI Diet Matcher Locked</div>
-            <p>Unlock custom cognitive behavioral health coaching strategies mapped directly to your Myers-Briggs personality matrix. Premium accounts only.</p>
-        </div>
-        """, unsafe_allow_html=True)
-    st.markdown("---")
-
-    # ════════════════════════════════════════════════════════════════════════════
-    # SECTION 11: CUSTOM PDF EXPORT REPORT GENERATION SYSTEM (PREMIUM)
-    # ════════════════════════════════════════════════════════════════════════════
-    st.markdown('<div class="section-header sh-blue"><div class="section-icon">📄</div><div class="section-title">SECTION 11 — Document Export System Pipeline</div></div>', unsafe_allow_html=True)
-    if st.session_state.account_type == "PREMIUM":
-        with st.container():
-            st.markdown("""
-            <div class="glass-card">
-                <strong>📋 PDF Compiler Output Engine Active:</strong><br/>
-                Click the execution trigger button below to consolidate your current digital twin profile metrics, predictive graphs, macro matrices, and safety fair documentation vectors into a publication-grade health dossier.
-            </div>
-            """, unsafe_allow_html=True)
-            
-            if st.button("📥 Compile Comprehensive PDF Dossier Data Document", use_container_width=True):
-                patient_dataset_obj = {
-                    "name": name if name else "Anonymous Demonstration Client",
-                    "age": age,
-                    "gender": gender,
-                    "diabetes_type": diabetes_type
-                }
-                nutrition_dataset_obj = {
-                    "calories": total_cal,
-                    "carbs": total_carbs,
-                    "protein": total_protein,
-                    "fat": total_fat
-                }
-                recs_array = get_recommendations(
-                    diabetes_type=diabetes_type.replace(" Profile","").replace(" Condition","").replace(" Mellitus",""),
-                    glucose=current_glucose, predicted_peak=peak_excursion_val, bmi=bmi, bmi_cat=bmi_cat, carbs=total_carbs
-                )
-                
-                pdf_binary_stream = generate_pdf_report(
-                    patient=patient_dataset_obj, nutrition=nutrition_dataset_obj, glucose_now=current_glucose,
-                    predictions=predictions, score=hs, risk=risk, recommendations=recs_array, bmi=bmi, bmi_cat=bmi_cat
-                )
-                
-                st.download_button(
-                    label="⬇️ Click to Download Generated PDF System Report File",
-                    data=pdf_binary_stream,
-                    file_name=f"GlucoVision_Health_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
-                    mime="application/pdf",
-                    use_container_width=True
-                )
-                st.success("✅ PDF compiled and ready for deployment transfer!")
-    else:
-        st.markdown("""
-        <div class="upgrade-box">
-            <div class="upgrade-title">🔒 Premium Report Export Locked</div>
-            <p>Upgrade to Premium to compile and export clinical-style PDF data sheets summarizing your digital twin forecast arrays, food logs, and health score ledgers.</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-    st.markdown("---")
-
-    # ════════════════════════════════════════════════════════════════════════════
-    # SYSTEM INTERFACE FOOTER LEGAL DISCLAIMER
-    # ════════════════════════════════════════════════════════════════════════════
-    st.markdown("""
-    <div style="text-align:center; padding: 2rem 1rem 1rem; border-top: 1px solid rgba(0,217,255,0.2);">
-        <div style="font-size:0.9rem; font-weight:700; color:#ff3b3b; margin-bottom:0.5rem">
-            ⚠️ IMPORTANT SYSTEM INTERFACE DISCLAIMER
-        </div>
-        <div style="font-size:0.8rem; color:#8b949e; max-width:700px; margin:0 auto; line-height:1.7">
-            GlucoVision AI is an <strong style="color:#ffffff">educational prototype</strong> created for
-            science fair demonstration purposes. It is <strong style="color:#ff3b3b">NOT a medical device</strong>
-            and is NOT intended for diagnosis, treatment, or any form of medical decision-making.
-            The glucose predictions and health scores are generated by simplified educational models
-            and do not reflect clinical accuracy. Always consult a qualified healthcare professional
-            for any medical concerns.
-        </div>
-        <div style="font-size:0.72rem; color:#484f58; margin-top:1.5rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;">
-            © 2026 GLUCOVISION AI PROTOTYPE LABS INC. ALL METRICS ARE SIMULATED SCHEMATICS.
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-# ─── ENTRY AUTH CONTROLLER ROUTING FLOW ───────────────────────────────────────
-def render_authentication_portal():
-    st.markdown("""
-    <div style="text-align:center; padding: 2.5rem 1rem 1.5rem;">
-        <h1 style="color:#00d9ff; font-size: 3.2rem; margin-bottom: 0; font-weight:800; letter-spacing:-0.02em;">🩺 GlucoVision AI</h1>
-        <p style="color:#8b949e; font-size: 1.1rem; font-weight:600; margin-top:0.3rem;">SaaS Metabolic Modeling & Digital Twin Simulation Hub</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-    col1, col2, col3 = st.columns([1, 1.8, 1])
-    with col2:
-        tab_login, tab_signup = st.tabs(["🔒 Secure Account Login", "✨ Create New Account"])
-        
-        with tab_login:
-            with st.form("auth_login_form"):
-                user_input = st.text_input("Enter Account Username")
-                pass_input = st.text_input("Enter Account Password", type="password")
-                login_trigger = st.form_submit_button("Authenticate & Initialize Portal", use_container_width=True)
-                
-                if login_trigger:
-                    if not user_input or not pass_input:
-                        st.error("Please enter both username and password values.")
-                    else:
-                        is_authenticated, verified_plan = verify_user(user_input, pass_input)
-                        if is_authenticated:
-                            st.session_state.logged_in = True
-                            st.session_state.username = user_input
-                            st.session_state.account_type = verified_plan
-                            st.success("Authentication successful! Loading metabolic workspace...")
-                            st.rerun()
-                        else:
-                            st.error("Invalid username or password credentials provided.")
-                            
-        with tab_signup:
-            with st.form("auth_signup_form"):
-                reg_user = st.text_input("Choose Unique Account Username")
-                reg_pass1 = st.text_input("Create Secure Password", type="password")
-                reg_pass2 = st.text_input("Confirm Secure Password", type="password")
-                signup_trigger = st.form_submit_button("Register New Free Tier Workspace", use_container_width=True)
-                
-                if signup_trigger:
-                    if not reg_user or not reg_pass1:
-                        st.error("Username and password fields cannot be left blank.")
-                    elif reg_pass1 != reg_pass2:
-                        st.error("Password confirmation mismatch. Input matching security values.")
-                    elif len(reg_user) < 3 or len(reg_pass1) < 5:
-                        st.error("Security Requirements: Username min 3 chars, Password min 5 chars.")
-                    else:
-                        if create_user(reg_user, reg_pass1):
-                            st.success("Account successfully indexed into database structure! Please access the Login tab to authenticate.")
-                        else:
-                            st.error("Registration Collision: Username is already registered inside database registry.")
+# ─── CORE DASHBOARD LOGIC RENDER ───────────────────────────────────────────────
 
 def main():
-    if st.session_state.logged_in:
-        run_main_application()
-    else:
-        render_authentication_portal()
+    view_mode, stress_level, dawn_effect = render_sidebar()
+
+    # Application Branding Banner Banner
+    st.markdown("""
+    <div class="hero-header">
+        <h1 class="hero-title">GlucoVision AI 🚀</h1>
+        <p class="hero-subtitle">Advanced Physiological Simulation Engine & Clinical Prediction Grid</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # -------------------------------------------------------------------------
+    # PANEL VIEW 1: COMPLETE INTEGRATED SAAS INFRASTRUCTURE
+    # -------------------------------------------------------------------------
+    if view_mode == "Full Integrated Ecosystem":
+        
+        # --- SECTION 1: PATIENT MATRIX ---
+        st.markdown("""
+        <div class="section-header sh-green">
+            <div class="section-icon">👤</div>
+            <div class="section-title">SECTION 1 — Patient Core Profile</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        c1, c2, c3, c4 = st.columns(4)
+        with c1: name = st.text_input("Patient Full Name", value="Alexander Mercer")
+        with c2: age = st.number_input("Biological Age (Years)", min_value=1, max_value=120, value=42)
+        with c3: gender = st.selectbox("Biological Sex", ["Male", "Female"])
+        with c4: diabetes_type = st.selectbox("Diabetes Classification Profile", ["Type 1 Diabetes", "Type 2 Diabetes", "Prediabetes", "No Diabetes"])
+
+        c5, c6, c7 = st.columns(3)
+        with c5: weight = st.number_input("Body Weight (kg)", min_value=10.0, max_value=250.0, value=78.5, step=0.1)
+        with c6: height = st.number_input("Stature Height (cm)", min_value=50.0, max_value=250.0, value=176.0, step=0.5)
+        with c7:
+            bmi, bmi_cat = calculate_bmi(weight, height)
+            st.markdown(f"<div style='margin-top:1.8rem; font-weight:700;'>Calculated Metrics Index: <span style='color:#00d9ff;'>{bmi} ({bmi_cat})</span></div>", unsafe_allow_html=True)
+
+        # --- SECTION 2: INSULIN LOGISTICS ---
+        st.markdown("""
+        <div class="section-header sh-purple">
+            <div class="section-icon">💉</div>
+            <div class="section-title">SECTION 2 — Exogenous Insulin Profile</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        col_i1, col_i2, col_i3 = st.columns(3)
+        with col_i1:
+            insulin_type = st.selectbox("Active Action Category", INSULIN_TYPES, index=1 if diabetes_type == "Type 1 Diabetes" else 0)
+        with col_i2:
+            is_no_ins = (insulin_type == "No Insulin" or diabetes_type == "No Diabetes")
+            insulin_dose = st.number_input("Administered Dose (Units)", min_value=0.0, max_value=80.0, value=0.0 if is_no_ins else 6.0, step=0.5, disabled=is_no_ins)
+        with col_i3:
+            time_since_injection = st.number_input("Time Elapsed Since Administration (Hours)", min_value=0.0, max_value=24.0, value=0.0 if is_no_ins else 0.5, step=0.25, disabled=is_no_ins)
+
+        # --- SECTION 3: FOOD INTELLIGENCE GRID ---
+        st.markdown("""
+        <div class="section-header sh-orange">
+            <div class="section-icon">🍽️</div>
+            <div class="section-title">SECTION 3 — Advanced Nutritional Intelligence</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.info("⚡ **Multi-Meal Simulation Buffer:** Add the precise array of elements ingested during this meal cycle to test immediate dynamic tracking.")
+        selected_foods = st.multiselect("Query / Select Ingested Food Items", options=sorted(list(FOOD_DB.keys())), default=["Basmati Rice (cooked) (100 g)", "Toor / Arhar Dal (cooked) (1 bowl (150 g))"])
+
+        total_cal = total_carbs = total_protein = total_fat = total_gi_weight = 0.0
+        
+        if selected_foods:
+            st.markdown("<p style='color:#00d9ff; font-weight:700;'>🔢 Fine-Tune Intake Quantities (Portion Scales):</p>", unsafe_allow_html=True)
+            f_cols = st.columns(min(len(selected_foods), 3))
+            
+            for idx, item in enumerate(selected_foods):
+                with f_cols[idx % 3]:
+                    multiplier = st.number_input(f"Scale Factor: {item.split('(')[0]}", min_value=0.1, max_value=10.0, value=1.0, step=0.1, key=f"food_{idx}")
+                    db_metrics = FOOD_DB[item]
+                    total_cal += db_metrics["calories"] * multiplier
+                    total_carbs += db_metrics["carbs"] * multiplier
+                    total_protein += db_metrics["protein"] * multiplier
+                    total_fat += db_metrics["fat"] * multiplier
+                    total_gi_weight += db_metrics["gi"] * (db_metrics["carbs"] * multiplier)
+            
+            # Weighted average glycemic tracking computation
+            calculated_avg_gi = (total_gi_weight / total_carbs) if total_carbs > 0 else 55.0
+        else:
+            calculated_avg_gi = 55.0
+
+        # Global macro review metrics readout
+        nm_c1, nm_c2, nm_c3, nm_c4, nm_c5 = st.columns(5)
+        nm_c1.metric("Meal Calories", f"{round(total_cal, 1)} kcal")
+        nm_c2.metric("Net Carbohydrates", f"{round(total_carbs, 1)} g")
+        nm_c3.metric("Proteins", f"{round(total_protein, 1)} g")
+        nm_c4.metric("Lipid Fats", f"{round(total_fat, 1)} g")
+        nm_c5.metric("Aggressive Glycemic GI Index", f"{round(calculated_avg_gi, 1)}")
+
+        # --- SECTION 4: INTEGRATED TIME-VARIANCE & COMPLEMENTARY BIOMETRICS ---
+        st.markdown("""
+        <div class="section-header sh-teal">
+            <div class="section-icon">🏃</div>
+            <div class="section-title">SECTION 4 — Active Metabolic Interventions</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        ex_c1, ex_c2, ex_c3 = st.columns(3)
+        with ex_c1:
+            time_since_meal = st.number_input("Time Elapsed Since Meal Ingestion (Hours)", min_value=0.0, max_value=12.0, value=0.0, step=0.25)
+        with ex_c2:
+            exercise_type = st.selectbox("Physical Activity Profile Interventions", ["No Exercise", "Light (walking, yoga)", "Moderate (jogging, cycling)", "Intense (running, gym, sports)"])
+        with ex_c3:
+            exercise_duration = st.number_input("Activity Execution Windows (Minutes)", min_value=0, max_value=180, value=0, step=5, disabled=(exercise_type == "No Exercise"))
+
+        # Baseline entering glucose profile reading
+        st.markdown("<br>", unsafe_allow_html=True)
+        g_c1, g_c2 = st.columns(2)
+        with g_c1:
+            current_glucose = st.number_input("Baseline Real-Time Capillary Glucose Reading (mg/dL)", min_value=40, max_value=500, value=135)
+        with g_c2:
+            st.markdown("<div style='padding-top:1.8rem; color:#8b949e; font-size:0.85rem; font-weight:600;'>System runs prediction architecture against target indices utilizing structural baseline parameters.</div>", unsafe_allow_html=True)
+
+        # --- RUN BIO-ENGINE PROCESS AT CELLULAR LAYERS ---
+        sim_data = glucose_prediction_model(
+            current_glucose=float(current_glucose),
+            carbs_g=total_carbs,
+            diabetes_type=diabetes_type,
+            insulin_type=insulin_type,
+            insulin_dose=insulin_dose,
+            time_since_injection_hr=time_since_injection,
+            weight_kg=weight,
+            age=age,
+            gender=gender,
+            calories_kcal=total_cal,
+            time_since_meal_hr=time_since_meal,
+            exercise_type=exercise_type,
+            exercise_duration_min=float(exercise_duration),
+            avg_gi=calculated_avg_gi,
+            stress_level=stress_level,
+            dawn_effect=dawn_effect
+        )
+        
+        analytics = compute_health_analytics(sim_data["curve"])
+        recommendations = generate_recommendations(analytics, total_carbs, bmi_cat)
+
+        # --- SECTION 5 & 6: ADVANCED HEALTH ENGINE SCOREBOARDS ---
+        st.markdown("""
+        <div class="section-header sh-yellow">
+            <div class="section-icon">🧠</div>
+            <div class="section-title">SECTION 5 & 6 — Time-In-Range (TIR) & Realtime Telemetry Grid</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # UI Visual Grid Readouts
+        m_col1, m_col2, m_col3, m_col4 = st.columns(4)
+        with m_col1:
+            risk_class = f"risk-{analytics['risk'].split()[0].lower()}"
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-icon">🛡️</div>
+                <div class="metric-value">{analytics['score']}</div>
+                <div class="metric-label">METABOLIC HEALTH SCORE</div>
+                <span class="{risk_class}">{analytics['risk']}</span>
+            </div>
+            """, unsafe_allow_html=True)
+            
+        with m_col2:
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-icon">🎯</div>
+                <div class="metric-value">{analytics['tir']}%</div>
+                <div class="metric-label">TIME IN RANGE (70-180 mg/dL)</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+        with m_col3:
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-icon">🧪</div>
+                <div class="metric-value">{analytics['hba1c']}%</div>
+                <div class="metric-label">ESTIMATED GLYCO HbA1C</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+        with m_col4:
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-icon">📈</div>
+                <div class="metric-value">{analytics['cv']}%</div>
+                <div class="metric-label">GLYCEAMIC VARIANCE (CV)</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        # --- SECTION 7: INTERACTIVE PLOTLY DATAFRAME VISUALIZATION ---
+        st.markdown("""
+        <div class="section-header sh-blue">
+            <div class="section-icon">📊</div>
+            <div class="section-title">SECTION 7 — Predictive Continuous Glucose Timeline Projection</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Plotly Graph Constructor
+        fig = go.Figure()
+        timeline = sim_data["timeline"]
+        curve = sim_data["curve"]
+
+        # Target Range Envelope Mapping
+        fig.add_shape(type="rect", x0=0, y0=70, x1=240, y1=180, fillcolor="rgba(0, 230, 118, 0.08)", line_width=0, name="Target Euglycemia")
+        # Critical Hypo Warning Zone Border Lines
+        fig.add_shape(type="rect", x0=0, y0=40, x1=240, y1=70, fillcolor="rgba(255, 59, 59, 0.06)", line_width=0, name="Hypoglycemia Critical Warning")
+
+        fig.add_trace(go.Scatter(x=timeline, y=curve, mode='lines+markers', name='Twin Prediction Vector', line=dict(color='#00d9ff', width=3.5), marker=dict(size=6, color='#ffffff', line=dict(color='#00d9ff', width=1.5))))
+
+        # Precise temporal callout points mapping
+        times_to_mark = [30, 60, 120, 240]
+        vals_to_mark = [sim_data["pred_30"], sim_data["pred_60"], sim_data["pred_120"], sim_data["pred_240"]]
+        fig.add_trace(go.Scatter(x=times_to_mark, y=vals_to_mark, mode='markers+text', text=[f"{v} mg/dL" for v in vals_to_mark], textposition="top center", marker=dict(color='#ff2d95', size=10, symbol='diamond'), name='Crucial Milestones'))
+
+        fig.update_layout(
+            paper_bgcolor='#0d1117', plot_bgcolor='#161b22',
+            title=dict(text="Continuous Biological Simulation Envelope (4-Hour Projection Window)", font=dict(color="#ffffff", size=16), x=0.5),
+            xaxis=dict(title="Timeline Intercept Vector (Minutes)", gridcolor="#30363d", color="#ffffff"),
+            yaxis=dict(title="Systemic Blood Glucose Density (mg/dL)", gridcolor="#30363d", color="#ffffff", range=[30, max(250, max(curve)+30)]),
+            legend=dict(font=dict(color="#ffffff")), margin=dict(l=40, r=40, t=50, b=40), height=480
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+        # --- SECTION 8 & 9: ADVISORY BLOCKS ---
+        st.markdown("""
+        <div class="section-header sh-pink">
+            <div class="section-icon">💡</div>
+            <div class="section-title">SECTION 8 & 9 — Automated Engine Intelligence Recommendations</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        rec_cols = st.columns(len(recommendations) if recommendations else 1)
+        for r_idx, r_text in enumerate(recommendations):
+            with rec_cols[r_idx]:
+                card_type = "rc-high" if "🚨" in r_text or "📈" in r_text else "rc-low"
+                st.markdown(f"<div class='rec-card {card_type}'>{r_text}</div>", unsafe_allow_html=True)
+
+        # --- SECTION 10: AUTOMATED EXPORT ENGINE FOR MEDICAL REVIEW ---
+        st.markdown("""
+        <div class="section-header sh-blue">
+            <div class="section-icon">📄</div>
+            <div class="section-title">SECTION 10 — Clinical Quality PDF Reporting System</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        patient_payload = {"name": name, "age": age, "gender": gender, "diabetes": diabetes_type, "weight": weight, "height": height}
+        nutrition_payload = {"calories": total_cal, "carbs": total_carbs, "protein": total_protein, "fat": total_fat}
+        
+        pdf_bytes = generate_pdf_report(patient_payload, nutrition_payload, float(current_glucose), analytics, recommendations)
+        
+        st.markdown("""
+        <div style="background-color:#161b22; border: 2px solid #30363d; padding:1.2rem; border-radius:8px;">
+            <p style="margin-top:0;">📋 <strong>Compile and locks all dashboard components:</strong> Exports comprehensive state matrix indicators, full 240-minute cellular digital twin projection tracks, and automated recommendations vector matrixes into a unified professional dossier print layout.</p>
+        </div>
+        <br>
+        """, unsafe_allow_html=True)
+        
+        st.download_button(
+            label="📥 DOWNLOAD EXECUTIVE COMPREHENSIVE MEDICAL HEALTH REPORT",
+            data=pdf_bytes,
+            file_name=f"GlucoVision_Pro_Report_{name.replace(' ', '_')}.pdf",
+            mime="application/pdf"
+        )
+
+    # -------------------------------------------------------------------------
+    # PANEL VIEW 2: COMPLETE ISOLATED NUTRIENT DATA DISCOVERY EXPLORER
+    # -------------------------------------------------------------------------
+    elif view_mode == "Nutritional Inventory Search":
+        st.markdown("""
+        <div class="section-header sh-orange">
+            <div class="section-icon">🔍</div>
+            <div class="section-title">Metabolic Nutrition Index Database Explorer</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        search_query = st.text_input("Search Food Item Registry Engine (e.g., Rice, Oats, Chicken, Ragi)...", value="")
+        
+        filtered_foods = []
+        for k, v in FOOD_DB.items():
+            if search_query.lower() in k.lower():
+                filtered_foods.append({
+                    "Food Description Core Tag": k,
+                    "Calories (kcal)": v["calories"],
+                    "Carbohydrates (g)": v["carbs"],
+                    "Protein (g)": v["protein"],
+                    "Lipids/Fat (g)": v["fat"],
+                    "Glycemic Speed Rating (GI)": v["gi"],
+                    "Glycemic Tier Load Classification": "HIGH (Spiker)" if v["gi"] >= 70 else ("MEDIUM (Moderate)" if v["gi"] >= 55 else "LOW (Stable/Blunted)")
+                })
+        
+        if filtered_foods:
+            df_food = pd.DataFrame(filtered_foods)
+            st.dataframe(df_food.style.background_gradient(cmap="Blues", subset=["Glycemic Speed Rating (GI)"]), use_container_width=True, height=500)
+        else:
+            st.error("No metabolic profile match located for target parameters inside database arrays.")
+
+    # -------------------------------------------------------------------------
+    # PANEL VIEW 3: ADVANCED STRESS / GLYCEMIC DIGITAL TWIN SIMULATION SANDBOX
+    # -------------------------------------------------------------------------
+    elif view_mode == "Digital Twin Calibration":
+        st.markdown("""
+        <div class="section-header sh-purple">
+            <div class="section-icon">🔬</div>
+            <div class="section-title">Physiological Stress Matrix Sandbox Model</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.warning("🧪 **Advanced Medical Physics Simulation:** This visualization mode runs hyper-isolated variations to verify how extreme changes in Glycemic Index (GI) impact human biology under varying biological settings.")
+
+        sandbox_gi = st.slider("Target Isolated Glycemic Index Shift Profile", min_value=10, max_value=100, value=65, step=5)
+        sandbox_carbs = st.slider("Target Ingested Carbohydrate Mass Payload (grams)", min_value=5, max_value=150, value=60, step=5)
+        sandbox_insulin = st.slider("Target Micro-Dose Rapid Insulin Vector Correction (Units)", min_value=0.0, max_value=25.0, value=4.0, step=0.5)
+
+        # Simulation processing
+        res_baseline = glucose_prediction_model(140.0, sandbox_carbs, "Type 1 Diabetes", "Rapid-Acting (e.g., Lispro, Aspart)", sandbox_insulin, 0.0, 75.0, 35, "Male", 300, 0.0, "No Exercise", 0, avg_gi=float(sandbox_gi))
+        res_stressed = glucose_prediction_model(140.0, sandbox_carbs, "Type 1 Diabetes", "Rapid-Acting (e.g., Lispro, Aspart)", sandbox_insulin, 0.0, 75.0, 35, "Male", 300, 0.0, "No Exercise", 0, avg_gi=float(sandbox_gi), stress_level="High / Anxious")
+
+        fig_sb = go.Figure()
+        fig_sb.add_trace(go.Scatter(x=res_baseline["timeline"], y=res_baseline["curve"], name="Normal Physiology Configuration", line=dict(color="#00e676", width=3)))
+        fig_sb.add_trace(go.Scatter(x=res_stressed["timeline"], y=res_stressed["curve"], name="Elevated Autonomic Cortisol Stress Configuration", line=dict(color="#ff3b3b", width=3, dash='dash')))
+        
+        fig_sb.update_layout(
+            paper_bgcolor='#0d1117', plot_bgcolor='#161b22',
+            title="Twin System Intercept Cross-Comparison Curves",
+            xaxis=dict(title="Time Vector Minutes", color="#ffffff"),
+            yaxis=dict(title="Glucose Vector Target mg/dL", color="#ffffff"),
+            legend=dict(font=dict(color="#ffffff")), height=450
+        )
+        st.plotly_chart(fig_sb, use_container_width=True)
+
+    # ════════════════════════════════════════════════════════════════════════════
+    # PROFESSIONAL COMPLIANCE AND SAFETY DISCLAIMER
+    # ════════════════════════════════════════════════════════════════════════════
+    st.markdown("---")
+    st.markdown("""
+    <div style="text-align:center; padding: 2rem 1rem 1rem; border-top: 1px solid rgba(0,217,255,0.2);">
+        <div style="font-size:0.95rem; font-weight:700; color:#ff3b3b; margin-bottom:0.5rem">
+            ⚠️ IMPORTANT REGULATORY & COMPLIANCE DISCLAIMER NOTICE
+        </div>
+        <div style="font-size:0.82rem; color:#c9d1d9; max-width:850px; margin:0 auto; line-height:1.7; font-weight:600;">
+            GlucoVision AI is an <strong>educational engineering algorithmic prototype simulation sandbox</strong> built exclusively 
+            for validation, display UI architecture, and pedagogical concept exhibition. It is <strong>NOT a certified medical device</strong> 
+            and must never under any circumstances be utilized for metabolic diagnostics, actionable patient prescriptions, 
+            insulin dosing calibrations, or real therapeutic decision-making matrices. The math calculations executed by the system 
+            are non-clinical estimations and do not correspond to precise real-world human biochemical responses. Always prioritize direct consultation 
+            with a qualified Endocrinologist or certified healthcare practitioner team for authentic medical management.
+        </div>
+        <div style="font-size:0.75rem; color:#8b949e; margin-top:1rem; font-weight:500;">
+            GlucoVision AI Framework Pro • Streamlit Environment Deployment Build v4.9.2
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
 
 if __name__ == "__main__":
     main()
