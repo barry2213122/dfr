@@ -1022,7 +1022,7 @@ elif chosen_tab == "📄 Automated Report Exportation":
                 textColor=colors.HexColor('#111827'),
                 spaceAfter=8
             )
-            
+             
             story = []
             
             # Add element blocks into structural sequence layout
