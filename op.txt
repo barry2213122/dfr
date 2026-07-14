@@ -1,0 +1,13 @@
+streamlit>=1.47.0
+pandas
+numpy
+plotly
+matplotlib
+scikit-learn
+pillow
+python-dotenv
+reportlab
+streamlit-extras
+streamlit-option-menu
+streamlit-lottie
+markdown
